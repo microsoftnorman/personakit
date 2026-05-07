@@ -54,9 +54,51 @@ companion plugin).
 > Personakit is currently a public-preview spec + reference implementation.
 > APIs, file formats, and the `.agent.md` schema may change.
 
+### One-line install
+
+From the root of the project you want Personakit to live in:
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.sh | bash
+```
+
+**Windows (PowerShell)**
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.ps1 | iex
+```
+
+What it does:
+
+1. Clones this repo into `./.personakit-plugin/`
+2. Runs `npm install` and builds `personakit-mcp`
+3. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
+   existing one — prints a merge snippet instead)
+
+Optional environment variables before piping into your shell:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PERSONAKIT_DIR` | `./.personakit-plugin` | Where to clone |
+| `PERSONAKIT_REF` | `main` | Git ref to check out |
+| `PERSONAKIT_NO_VSCODE` | unset | Set to `1` to skip the `.vscode/mcp.json` write |
+
+> ⚠️ **Read before piping anything into your shell.** Inspect
+> [`scripts/install.sh`](./scripts/install.sh) and
+> [`scripts/install.ps1`](./scripts/install.ps1) first if your security policy
+> requires it.
+
+### Manual install
+
+If you prefer to do it by hand:
+
 1. Clone the repo and install:
 
    ```bash
+   git clone https://github.com/microsoftnorman/personakit.git
+   cd personakit
    npm install
    npm run build -w personakit-mcp
    ```
