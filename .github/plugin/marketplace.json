@@ -1,0 +1,28 @@
+{
+  "name": "personakit",
+  "metadata": {
+    "description": "Personakit — synthetic-customer plugin for GitHub Copilot. Generate persona agents from market research, interview them, run multi-persona panels, and produce pricing + go-to-market plans through a PM Orchestrator agent.",
+    "version": "0.1.0"
+  },
+  "owner": {
+    "name": "Personakit contributors",
+    "email": "personakit@example.invalid"
+  },
+  "plugins": [
+    {
+      "name": "personakit",
+      "source": "./plugins/personakit",
+      "description": "Synthetic-customer engine: persona generation, interviews, panels, and PM-orchestrated GTM planning.",
+      "version": "0.1.0",
+      "skills": [
+        "./skills/personakit-bootstrap",
+        "./skills/personakit-generate-personas",
+        "./skills/personakit-interview",
+        "./skills/personakit-panel",
+        "./skills/personakit-pm-review",
+        "./skills/personakit-go-to-market"
+      ],
+      "mcpServers": ".mcp.json"
+    }
+  ]
+}

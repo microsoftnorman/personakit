@@ -1,0 +1,14 @@
+{
+  "name": "personakit-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personakit — synthetic-customer plugin for GitHub Copilot.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w personakit-mcp",
+    "test": "npm run test -w personakit-mcp"
+  }
+}

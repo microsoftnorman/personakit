@@ -1,0 +1,31 @@
+# Node
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+.DS_Store
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Personakit runtime sandbox (per-workspace generated personas, transcripts, etc.)
+# The example/ copy is checked in intentionally; runtime instances are not.
+/.personakit/
