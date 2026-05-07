@@ -5,7 +5,10 @@
       "command": "npx",
       "args": ["-y", "personakit-mcp@latest"],
       "env": {
-        "PERSONAKIT_WORKSPACE_ROOT": "${workspaceFolder}"
+        "PERSONAKIT_WORKSPACE_ROOT": "${workspaceFolder}",
+        "GITHUB_MODELS_TOKEN": "${env:GITHUB_MODELS_TOKEN}",
+        "GH_TOKEN": "${env:GH_TOKEN}",
+        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
       }
     }
   }

@@ -41,10 +41,12 @@ initialize, or start Personakit. Do not bootstrap unprompted.
    - If the user pointed at a brief file (e.g. `examples/saas-project-management-tool/product-brief.md`), read it and summarize it back.
    - Otherwise, ask the 3 bootstrap questions and write the answers to
      `<workspace>/personakit-brief.md` (with the user's permission).
-4. Confirm the LLM credential. Personakit auto-detects in this order:
-   - `GITHUB_MODELS_TOKEN` (recommended for Copilot users)
-   - `OPENAI_API_KEY`
-   - `ANTHROPIC_API_KEY`
+4. Confirm the GitHub Copilot credential. Personakit only works with GitHub
+   Copilot — it uses GitHub-hosted models exclusively. It auto-detects in
+   this order:
+   - `GITHUB_MODELS_TOKEN` (preferred)
+   - `GH_TOKEN` (set by the GitHub Copilot CLI for the active session)
+   - `GITHUB_TOKEN` (generic GitHub token, also accepted)
 
    If none are present, instruct the user to set one before running
    `personakit-generate-personas`.
@@ -66,7 +68,7 @@ examples/saas-project-management-tool/product-brief.md.
   ✓ Brief found: 2.1 KB, summary:
     A mid-market project management SaaS competing on integrations
     and AI-assisted planning.
-  ✓ LLM credential detected: GITHUB_MODELS_TOKEN
+  ✓ LLM credential detected: GITHUB_MODELS_TOKEN (GitHub Copilot)
 
   Next step — say:
     "Generate 5 personas for this brief using the research-inputs folder."

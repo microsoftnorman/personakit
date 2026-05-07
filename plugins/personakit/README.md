@@ -72,11 +72,14 @@ Personakit ships a TypeScript / Node MCP server (`personakit-mcp`) registered
 via [`.mcp.json`](./.mcp.json). It owns the `.personakit/` filesystem sandbox,
 the LLM client, and 10 tools.
 
-### LLM credentials (auto-detected, in order)
+### GitHub Copilot credential (auto-detected, in order)
 
-1. `GITHUB_MODELS_TOKEN` — recommended for Copilot users
-2. `OPENAI_API_KEY`
-3. `ANTHROPIC_API_KEY`
+Personakit only works with GitHub Copilot. It uses GitHub-hosted models
+exclusively. Set one of these tokens:
+
+1. `GITHUB_MODELS_TOKEN` — preferred. Explicit, scoped to GitHub Models.
+2. `GH_TOKEN` — the Copilot CLI sets this for the active session.
+3. `GITHUB_TOKEN` — generic GitHub token, also accepted.
 
 If none are set, Personakit refuses to generate and tells the user how to
 configure one.
@@ -84,7 +87,7 @@ configure one.
 ### Prerequisites
 
 - Node.js 18+
-- An LLM credential (above)
+- A GitHub Copilot credential (above)
 
 ## Safety guardrails
 

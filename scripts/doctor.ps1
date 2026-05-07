@@ -9,7 +9,7 @@
 .NOTES
     Reports on:
       - Dependencies (git, node 18+, npm)
-      - LLM credentials
+      - GitHub Copilot credentials
       - Plugin clone state (path, branch, current vs latest commit)
       - Build output (dist/index.js present)
       - .vscode/mcp.json presence
@@ -57,8 +57,8 @@ Write-PkBold '1. Dependencies'
 if (-not (Test-PkAllDeps)) { $Issues++ }
 Write-Host ''
 
-# ─── 2. LLM credential ─────────────────────────────────────────────────────
-Write-PkBold '2. LLM credential'
+# ─── 2. GitHub Copilot credential ──────────────────────────────────────────
+Write-PkBold '2. GitHub Copilot credential'
 Test-PkLlmCredential
 Write-Host ''
 

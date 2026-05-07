@@ -30,13 +30,15 @@ see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 - **git**
 - **Node.js ≥ 18** + **npm**
-- An LLM credential (any one of):
-  - `GITHUB_MODELS_TOKEN` *(recommended for Copilot users — no extra account)*
-  - `OPENAI_API_KEY`
-  - `ANTHROPIC_API_KEY`
-- Copilot host (e.g., VS Code Insiders + GitHub Copilot Chat) for the
-  skills/agents experience. The MCP server also runs standalone — see
-  [Example 7 in ARCHITECTURE.md](./ARCHITECTURE.md#example-7--direct-mcp-usage-no-copilot-host).
+- **GitHub Copilot.** Personakit is GitHub-Copilot-only by design — it uses
+  GitHub-hosted models exclusively and reuses your Copilot auth. Provide
+  one of these tokens:
+  - `GITHUB_MODELS_TOKEN` *(preferred — explicit, scoped to GitHub Models)*
+  - `GH_TOKEN` *(the [GitHub Copilot CLI](https://github.com/github/copilot-cli) sets this for the active session)*
+  - `GITHUB_TOKEN` *(generic GitHub token, also accepted)*
+- A Copilot host — either **VS Code Insiders + GitHub Copilot Chat** or the
+  **GitHub Copilot CLI** — to actually run the skills/agents. The MCP server
+  itself is host-agnostic, but every example assumes a Copilot host.
 
 The installer below auto-detects your OS and package manager and prints exact
 install commands for anything missing.
@@ -68,7 +70,7 @@ The installer:
 3. Runs `npm install` and builds `personakit-mcp`.
 4. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
    existing one — prints a merge snippet instead).
-5. Reports whether an LLM credential is set.
+5. Reports whether a GitHub Copilot credential is set.
 
 Optional environment variables before the pipe:
 
@@ -85,7 +87,7 @@ Optional environment variables before the pipe:
 
 ---
 
-## 2. Set your LLM credential
+## 2. Set your GitHub Copilot credential
 
 ```bash
 # macOS / Linux
@@ -96,6 +98,9 @@ export GITHUB_MODELS_TOKEN="<your token>"
 # Windows
 $env:GITHUB_MODELS_TOKEN = "<your token>"
 ```
+
+If you're already running the [GitHub Copilot CLI](https://github.com/github/copilot-cli),
+your `GH_TOKEN` / `GITHUB_TOKEN` is reused automatically — no extra setup.
 
 Reload your editor so it picks up the new MCP server registration.
 
@@ -153,7 +158,7 @@ Set `PERSONAKIT_FORCE=1` to rebuild even when already up-to-date.
 
 ## 5. Health check (`doctor`)
 
-Read-only diagnostic. Reports on dependencies, LLM credentials, plugin clone
+Read-only diagnostic. Reports on dependencies, GitHub Copilot credentials, plugin clone
 state (incl. how many commits behind `origin/main` you are), build output,
 `.vscode/mcp.json` registration, and `.personakit/` sandbox stats. Exits 0
 when everything is green.
@@ -181,7 +186,7 @@ npm run build -w personakit-mcp
 
 Then install the plugin into Copilot the same way you would any
 [github/copilot-plugins](https://github.com/github/copilot-plugins) plugin,
-and set one of the LLM credential env vars above.
+and set one of the GitHub Copilot credential env vars above.
 
 ---
 

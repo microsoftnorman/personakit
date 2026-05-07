@@ -129,18 +129,23 @@ pk_check_dep() {
   return 0
 }
 
-# Check the LLM credential (warn-only — not a hard requirement at install time).
+# Check the GitHub credential (warn-only — not a hard requirement at install time).
+# Personakit only works with GitHub Copilot. We accept GITHUB_MODELS_TOKEN
+# (preferred) or fall back to GH_TOKEN / GITHUB_TOKEN, both of which the
+# Copilot CLI sets for the active session.
 pk_check_llm_credential() {
   if [ -n "${GITHUB_MODELS_TOKEN:-}" ]; then
-    pk_ok "LLM credential: GITHUB_MODELS_TOKEN"
-  elif [ -n "${OPENAI_API_KEY:-}" ]; then
-    pk_ok "LLM credential: OPENAI_API_KEY"
-  elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-    pk_ok "LLM credential: ANTHROPIC_API_KEY"
+    pk_ok "GitHub credential: GITHUB_MODELS_TOKEN"
+  elif [ -n "${GH_TOKEN:-}" ]; then
+    pk_ok "GitHub credential: GH_TOKEN (Copilot CLI session)"
+  elif [ -n "${GITHUB_TOKEN:-}" ]; then
+    pk_ok "GitHub credential: GITHUB_TOKEN"
   else
-    pk_warn "No LLM credential set (GITHUB_MODELS_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY)"
-    pk_dim "Set one before running persona generation. Example:"
-    pk_dim "  export GITHUB_MODELS_TOKEN=<your token>"
+    pk_warn "No GitHub credential set (GITHUB_MODELS_TOKEN / GH_TOKEN / GITHUB_TOKEN)"
+    pk_dim "Personakit only works with GitHub Copilot. Set one of:"
+    pk_dim "  export GITHUB_MODELS_TOKEN=<your token>      # preferred"
+    pk_dim "  export GH_TOKEN=<your token>                 # Copilot CLI session token"
+    pk_dim "  export GITHUB_TOKEN=<your token>             # generic GitHub token"
   fi
 }
 

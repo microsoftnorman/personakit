@@ -5,7 +5,7 @@
 #
 # Reports on:
 #   - Dependencies (git, node 18+, npm)
-#   - LLM credentials
+#   - GitHub Copilot credentials
 #   - Plugin clone state (path, branch, current vs latest commit)
 #   - Build output (dist/index.js present)
 #   - .vscode/mcp.json presence
@@ -49,8 +49,8 @@ pk_bold "1. Dependencies"
 if ! pk_check_all_deps; then ISSUES=$((ISSUES+1)); fi
 echo
 
-# ─── 2. LLM credential ─────────────────────────────────────────────────────
-pk_bold "2. LLM credential"
+# ─── 2. GitHub Copilot credential ──────────────────────────────────────────
+pk_bold "2. GitHub Copilot credential"
 pk_check_llm_credential
 echo
 

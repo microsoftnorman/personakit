@@ -151,7 +151,7 @@ Top-level modules:
 | `src/store/index.ts` | All `.personakit/` filesystem I/O. `Store.resolve()` is the only path-resolver and refuses anything outside the workspace root (path-traversal guard). |
 | `src/safety/anonymize.ts` | PII redaction (email, phone, SSN, credit card, IP, secret-like tokens, URLs with tokens, street addresses, names). |
 | `src/audit.ts` | Append-only JSONL audit log under `.personakit/audit/YYYY-MM-DD.jsonl`. Scrubs secret-shaped fields before writing. |
-| `src/llm/client.ts` | LLM dispatch. Auto-detects `GITHUB_MODELS_TOKEN` → `OPENAI_API_KEY` → `ANTHROPIC_API_KEY`. |
+| `src/llm/client.ts` | GitHub-Copilot-only LLM dispatch. Auto-detects `GITHUB_MODELS_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`. No third-party providers by design. |
 | `src/context.ts` | Per-request execution context (workspace root, store, llm, audit). |
 | `src/types.ts` | Shared zod schemas for `Persona`, `MarketBrief`, `InterviewTurn`, etc. |
 | `src/tools/*.ts` | One file per tool family — `research`, `personas`, `interview`, `panel`, `feedback`, `pricing`, `gtm`. |
@@ -344,17 +344,35 @@ replaces any value whose **key** matches a secret pattern (`token`, `apiKey`,
 
 ---
 
-## LLM credential resolution
+## GitHub Copilot credential resolution
+
+Personakit only works with GitHub Copilot. There are no fallbacks to OpenAI,
+Anthropic, or any other provider — by design. The goal is to reuse the same
+auth your Copilot host already has.
 
 Resolved in this order, first non-empty wins:
 
-1. `GITHUB_MODELS_TOKEN` — recommended for Copilot users (no extra account).
-2. `OPENAI_API_KEY`
-3. `ANTHROPIC_API_KEY`
+1. `GITHUB_MODELS_TOKEN` — preferred. Explicit, scoped to GitHub Models.
+2. `GH_TOKEN` — the [GitHub Copilot CLI](https://github.com/github/copilot-cli)
+   sets this for the active session, so Personakit just works when invoked
+   from `copilot` without extra configuration.
+3. `GITHUB_TOKEN` — generic GitHub token, also accepted.
 
 If none are set, persona-generating tools fail fast with an instructive error
 naming all three variables. Read-only tools (`list_personas`, `list_artifacts`)
 work without credentials.
+
+Why GitHub-only? Three reasons:
+
+- **One auth surface.** If you have a Copilot subscription, you already have
+  the credential. No new account, no separate billing, no key rotation in two
+  places.
+- **Deterministic safety surface.** The adversarial-review gate, the audit
+  log, and the PII anonymizer were tested against GitHub-hosted models. Adding
+  a vendor adds a regression-test matrix the project is not staffed for.
+- **Copilot-host alignment.** Personakit ships skills and `.agent.md` files
+  that target the Copilot plugin contract. Pretending the LLM layer is
+  pluggable when the host layer isn't would be honest only on paper.
 
 ---
 
@@ -626,10 +644,14 @@ Copilot (personakit-go-to-market skill):
        plan is too vague to attack, not that the feature is uncontestable.
 ```
 
-### Example 7 — Direct MCP usage (no Copilot host)
+### Example 7 — Direct MCP usage (debug / inspection)
 
-If you just want the tools — not the skills/agents — you can call the MCP
-server directly with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+You should normally drive Personakit through a Copilot host (Copilot Chat or
+the Copilot CLI). For debugging the tool schemas, you can also call the MCP
+server directly with the
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector). Note that
+this still requires a GitHub Copilot credential — Personakit will refuse to
+generate without one.
 
 ```bash
 # After: npm install && npm run build -w personakit-mcp

@@ -96,7 +96,9 @@ if ($env:PERSONAKIT_NO_VSCODE -eq '1') {
       "args": ["$absMcp"],
       "env": {
         "PERSONAKIT_WORKSPACE_ROOT": "`${workspaceFolder}",
-        "GITHUB_MODELS_TOKEN": "`${env:GITHUB_MODELS_TOKEN}"
+        "GITHUB_MODELS_TOKEN": "`${env:GITHUB_MODELS_TOKEN}",
+        "GH_TOKEN": "`${env:GH_TOKEN}",
+        "GITHUB_TOKEN": "`${env:GITHUB_TOKEN}"
       }
     }
   }
@@ -115,8 +117,8 @@ if ($env:PERSONAKIT_NO_VSCODE -eq '1') {
 }
 Write-Host ''
 
-# ─── LLM credential check (warn-only) ──────────────────────────────────────
-Write-PkBold 'LLM credential'
+# ─── GitHub Copilot credential check (warn-only) ───────────────────────────
+Write-PkBold 'GitHub Copilot credential'
 Test-PkLlmCredential
 Write-Host ''
 
@@ -124,8 +126,9 @@ Write-Host ''
 Write-PkBold 'Done.'
 Write-Host ''
 Write-Host '  Next steps:'
-Write-Host '    1. Set an LLM credential if you haven''t yet:'
-Write-Host '         $env:GITHUB_MODELS_TOKEN = "<your token>"'
+Write-Host '    1. Make sure you have a GitHub Copilot credential available:'
+Write-Host '         $env:GITHUB_MODELS_TOKEN = "<your token>"   # preferred'
+Write-Host '       (Copilot CLI''s GH_TOKEN / GITHUB_TOKEN also work.)'
 Write-Host ''
 Write-Host '    2. Reload your editor (VS Code Insiders + Copilot Chat recommended).'
 Write-Host ''

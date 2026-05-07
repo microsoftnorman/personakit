@@ -1,12 +1,18 @@
 /**
- * Pluggable LLM client. Auto-detects provider in this order:
- *   1. GITHUB_MODELS_TOKEN (GitHub Models API — recommended for Copilot users)
- *   2. OPENAI_API_KEY     (OpenAI Chat Completions)
- *   3. ANTHROPIC_API_KEY  (Anthropic Messages API)
+ * GitHub-Copilot-only LLM client.
  *
- * The client is intentionally small. We do not depend on a vendor SDK so the
- * MCP server stays trim. All providers are addressed via `fetch` against
- * documented HTTP APIs.
+ * Personakit is designed to run inside a GitHub Copilot host (Copilot Chat,
+ * Copilot CLI, or any Copilot-compatible MCP host) and uses GitHub-hosted
+ * models exclusively. No third-party LLM providers are supported by design —
+ * the goal is to reuse the same auth your Copilot host already has.
+ *
+ * Credentials are auto-detected from the environment in this order:
+ *   1. GITHUB_MODELS_TOKEN  (preferred — explicit, scoped to GitHub Models)
+ *   2. GH_TOKEN             (Copilot CLI sets this for the active session)
+ *   3. GITHUB_TOKEN         (broader fallback, also accepted by Copilot CLI)
+ *
+ * The client is intentionally small — no vendor SDK — so the MCP server stays
+ * trim. Requests go to GitHub Models via `fetch`.
  *
  * For tests, inject a `MockLlmClient` instead.
  */
@@ -46,28 +52,23 @@ export class LlmError extends Error {
   }
 }
 
-/** Auto-detect a provider from environment variables. */
+/**
+ * Auto-detect a GitHub Copilot credential from the environment.
+ *
+ * Personakit only supports GitHub-hosted models. If you need a different
+ * provider, that is a fork — not a configuration option.
+ */
 export function createLlmClientFromEnv(env: NodeJS.ProcessEnv): LlmClient {
-  if (env.GITHUB_MODELS_TOKEN) {
+  const token =
+    env.GITHUB_MODELS_TOKEN ?? env.GH_TOKEN ?? env.GITHUB_TOKEN;
+  if (token) {
     return new GithubModelsClient(
-      env.GITHUB_MODELS_TOKEN,
+      token,
       env.PERSONAKIT_MODEL ?? "gpt-4o-mini",
-    );
-  }
-  if (env.OPENAI_API_KEY) {
-    return new OpenAiClient(
-      env.OPENAI_API_KEY,
-      env.PERSONAKIT_MODEL ?? "gpt-4o-mini",
-    );
-  }
-  if (env.ANTHROPIC_API_KEY) {
-    return new AnthropicClient(
-      env.ANTHROPIC_API_KEY,
-      env.PERSONAKIT_MODEL ?? "claude-3-5-haiku-latest",
     );
   }
   throw new LlmError(
-    "No LLM credentials found. Set one of: GITHUB_MODELS_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY.",
+    "No GitHub credential found. Personakit only works with GitHub Copilot — set GITHUB_MODELS_TOKEN (preferred), or GH_TOKEN / GITHUB_TOKEN.",
     "none",
   );
 }
@@ -96,7 +97,8 @@ abstract class HttpJsonClient {
   }
 }
 
-interface OpenAiResponse {
+/** Shape of the chat-completions response returned by GitHub Models. */
+interface ChatCompletionsResponse {
   choices: Array<{ message: { content: string } }>;
 }
 
@@ -109,7 +111,7 @@ export class GithubModelsClient extends HttpJsonClient implements LlmClient {
     super();
   }
   async complete(opts: LlmCompleteOptions): Promise<string> {
-    const data = await this.post<OpenAiResponse>(
+    const data = await this.post<ChatCompletionsResponse>(
       "https://models.inference.ai.azure.com/chat/completions",
       { authorization: `Bearer ${this.token}` },
       {
@@ -121,73 +123,6 @@ export class GithubModelsClient extends HttpJsonClient implements LlmClient {
       this.provider,
     );
     return data.choices[0]?.message?.content ?? "";
-  }
-}
-
-export class OpenAiClient extends HttpJsonClient implements LlmClient {
-  readonly provider = "openai";
-  constructor(
-    private readonly token: string,
-    readonly model: string,
-  ) {
-    super();
-  }
-  async complete(opts: LlmCompleteOptions): Promise<string> {
-    const data = await this.post<OpenAiResponse>(
-      "https://api.openai.com/v1/chat/completions",
-      { authorization: `Bearer ${this.token}` },
-      {
-        model: this.model,
-        messages: opts.messages,
-        max_tokens: opts.maxTokens ?? 1500,
-        temperature: opts.temperature ?? 0.7,
-      },
-      this.provider,
-    );
-    return data.choices[0]?.message?.content ?? "";
-  }
-}
-
-interface AnthropicResponse {
-  content: Array<{ type: string; text?: string }>;
-}
-
-export class AnthropicClient extends HttpJsonClient implements LlmClient {
-  readonly provider = "anthropic";
-  constructor(
-    private readonly token: string,
-    readonly model: string,
-  ) {
-    super();
-  }
-  async complete(opts: LlmCompleteOptions): Promise<string> {
-    // Anthropic separates `system` from the messages list.
-    const system = opts.messages
-      .filter((m) => m.role === "system")
-      .map((m) => m.content)
-      .join("\n\n");
-    const messages = opts.messages
-      .filter((m) => m.role !== "system")
-      .map((m) => ({ role: m.role, content: m.content }));
-    const data = await this.post<AnthropicResponse>(
-      "https://api.anthropic.com/v1/messages",
-      {
-        "x-api-key": this.token,
-        "anthropic-version": "2023-06-01",
-      },
-      {
-        model: this.model,
-        system,
-        messages,
-        max_tokens: opts.maxTokens ?? 1500,
-        temperature: opts.temperature ?? 0.7,
-      },
-      this.provider,
-    );
-    return data.content
-      .filter((c) => c.type === "text")
-      .map((c) => c.text ?? "")
-      .join("");
   }
 }
 

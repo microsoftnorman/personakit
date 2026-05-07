@@ -98,7 +98,9 @@ else
         "args": ["$TARGET_DIR/packages/personakit-mcp/dist/index.js"],
         "env": {
           "PERSONAKIT_WORKSPACE_ROOT": "\${workspaceFolder}",
-          "GITHUB_MODELS_TOKEN": "\${env:GITHUB_MODELS_TOKEN}"
+          "GITHUB_MODELS_TOKEN": "\${env:GITHUB_MODELS_TOKEN}",
+          "GH_TOKEN": "\${env:GH_TOKEN}",
+          "GITHUB_TOKEN": "\${env:GITHUB_TOKEN}"
         }
       }
 
@@ -113,7 +115,9 @@ JSON
       "args": ["$TARGET_DIR/packages/personakit-mcp/dist/index.js"],
       "env": {
         "PERSONAKIT_WORKSPACE_ROOT": "\${workspaceFolder}",
-        "GITHUB_MODELS_TOKEN": "\${env:GITHUB_MODELS_TOKEN}"
+        "GITHUB_MODELS_TOKEN": "\${env:GITHUB_MODELS_TOKEN}",
+        "GH_TOKEN": "\${env:GH_TOKEN}",
+        "GITHUB_TOKEN": "\${env:GITHUB_TOKEN}"
       }
     }
   }
@@ -124,8 +128,8 @@ JSON
 fi
 echo
 
-# ─── LLM credential check (warn-only) ──────────────────────────────────────
-pk_bold "LLM credential"
+# ─── GitHub Copilot credential check (warn-only) ───────────────────────────
+pk_bold "GitHub Copilot credential"
 pk_check_llm_credential
 echo
 
@@ -133,8 +137,9 @@ echo
 pk_bold "Done."
 echo
 echo "  Next steps:"
-echo "    1. Set an LLM credential if you haven't yet:"
-echo "         export GITHUB_MODELS_TOKEN=<your token>"
+echo "    1. Make sure you have a GitHub Copilot credential available:"
+echo "         export GITHUB_MODELS_TOKEN=<your token>      # preferred"
+echo "       (Copilot CLI's GH_TOKEN / GITHUB_TOKEN also work.)"
 echo
 echo "    2. Reload your editor (VS Code Insiders + Copilot Chat recommended)."
 echo

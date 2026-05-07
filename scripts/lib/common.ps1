@@ -80,16 +80,21 @@ function Test-PkDep {
 }
 
 function Test-PkLlmCredential {
+    # Personakit only works with GitHub Copilot. We accept GITHUB_MODELS_TOKEN
+    # (preferred) or fall back to GH_TOKEN / GITHUB_TOKEN, both of which the
+    # Copilot CLI sets for the active session.
     if ($env:GITHUB_MODELS_TOKEN) {
-        Write-PkOk 'LLM credential: GITHUB_MODELS_TOKEN'
-    } elseif ($env:OPENAI_API_KEY) {
-        Write-PkOk 'LLM credential: OPENAI_API_KEY'
-    } elseif ($env:ANTHROPIC_API_KEY) {
-        Write-PkOk 'LLM credential: ANTHROPIC_API_KEY'
+        Write-PkOk 'GitHub credential: GITHUB_MODELS_TOKEN'
+    } elseif ($env:GH_TOKEN) {
+        Write-PkOk 'GitHub credential: GH_TOKEN (Copilot CLI session)'
+    } elseif ($env:GITHUB_TOKEN) {
+        Write-PkOk 'GitHub credential: GITHUB_TOKEN'
     } else {
-        Write-PkWarn 'No LLM credential set (GITHUB_MODELS_TOKEN, OPENAI_API_KEY, ANTHROPIC_API_KEY)'
-        Write-PkDim 'Set one before running persona generation. Example:'
-        Write-PkDim '  $env:GITHUB_MODELS_TOKEN = "<your token>"'
+        Write-PkWarn 'No GitHub credential set (GITHUB_MODELS_TOKEN / GH_TOKEN / GITHUB_TOKEN)'
+        Write-PkDim 'Personakit only works with GitHub Copilot. Set one of:'
+        Write-PkDim '  $env:GITHUB_MODELS_TOKEN = "<your token>"   # preferred'
+        Write-PkDim '  $env:GH_TOKEN            = "<your token>"   # Copilot CLI session token'
+        Write-PkDim '  $env:GITHUB_TOKEN        = "<your token>"   # generic GitHub token'
     }
 }
 
