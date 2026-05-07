@@ -384,7 +384,6 @@ Per [*One Hundred POCs a Day → Do This Safely*](https://agentdrivendevelopment
 ```
 .
 ├── .github/plugin/marketplace.json     # plugin registry
-├── .claude-plugin/marketplace.json     # symlink (cross-tool compat)
 ├── plugins/personakit/
 │   ├── README.md
 │   ├── .mcp.json                       # registers personakit-mcp
