@@ -1,60 +1,49 @@
-# Personakit
+# Personakit — Getting Started
 
-> Synthetic customers for GitHub Copilot. Generate market-research-grounded persona
-> agents, interview them, run multi-persona panels, and let a Product Manager
-> Orchestrator turn the feedback into pricing and a complete go-to-market plan.
+> Synthetic customers for GitHub Copilot. Generate market-research-grounded
+> persona agents, interview them, run multi-persona panels, and let a Product
+> Manager Orchestrator turn the feedback into pricing and a complete
+> go-to-market plan.
 
 Personakit is a [GitHub Copilot plugin](https://github.com/github/copilot-plugins)
-that turns Copilot into a synthetic-customer engine. It implements the *Synthetic
-Customers* + *Agents in Roles* pattern from
-[*One Hundred POCs a Day*](https://agentdrivendevelopment.com/one-hundred-pocs-a-day/)
-— minus the "build the code overnight" half (out of scope; that's a future
-companion plugin).
+that turns Copilot into a synthetic-customer engine. This guide gets you from
+zero to a first persona conversation in about three minutes.
 
-## What's inside
+For internals, the safety model, the full tool catalog, and worked examples,
+see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
-- **6 skills** that auto-activate in any Copilot chat — bootstrap, generate
-  personas, interview, panel discussion, PM review, go-to-market.
-- **3 custom agents** — a `pm-orchestrator` that drives end-to-end product
-  reviews, an `adversarial-pm` whose only job is to argue against the feature
-  (per the blog's "if every POC survives, your filter is broken" rule), and a
-  `persona-template` that the generator clones for each persona so you can chat
-  with them 1:1.
-- **`personakit-mcp`** — an MCP server (TypeScript / Node) that owns the
-  filesystem-sandboxed persona store, market-research ingestion, panel
-  orchestration, scoring, pricing synthesis, and GTM plan generation.
+---
 
-## How it works
+## What you get
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ Copilot Chat                                                   │
-│                                                                │
-│  user ──► skill (auto-activates on prompt)                     │
-│            │                                                   │
-│            ├──► pm-orchestrator agent                          │
-│            │       │                                           │
-│            │       ├─ runSubagent(persona-maya)  ──┐           │
-│            │       ├─ runSubagent(persona-devin) ──┤  panel    │
-│            │       ├─ runSubagent(persona-priya) ──┤           │
-│            │       ├─ runSubagent(adversarial-pm) ─┘           │
-│            │       │                                           │
-│            │       └─ MCP tools: research_market,              │
-│            │           generate_personas, panel_discussion,    │
-│            │           score_feature, produce_pricing,         │
-│            │           produce_gtm, adversarial_review …       │
-│            │                                                   │
-│            └──► writes to .personakit/{personas,transcripts,   │
-│                                       gtm,audit}/              │
-└────────────────────────────────────────────────────────────────┘
-```
+- **6 skills** that auto-activate in Copilot Chat (bootstrap, generate
+  personas, interview, panel, PM review, go-to-market).
+- **3 custom agents** — a `pm-orchestrator`, an `adversarial-pm`, and a
+  `persona-template` that's cloned per generated persona so you can chat 1:1.
+- **`personakit-mcp`** — an MCP server that owns the sandboxed persona store,
+  research ingestion, panel orchestration, scoring, pricing synthesis, and
+  GTM plan generation.
 
-## Quickstart
+---
 
-> Personakit is currently a public-preview spec + reference implementation.
-> APIs, file formats, and the `.agent.md` schema may change.
+## Prerequisites
 
-### One-line install
+- **git**
+- **Node.js ≥ 18** + **npm**
+- An LLM credential (any one of):
+  - `GITHUB_MODELS_TOKEN` *(recommended for Copilot users — no extra account)*
+  - `OPENAI_API_KEY`
+  - `ANTHROPIC_API_KEY`
+- Copilot host (e.g., VS Code Insiders + GitHub Copilot Chat) for the
+  skills/agents experience. The MCP server also runs standalone — see
+  [Example 7 in ARCHITECTURE.md](./ARCHITECTURE.md#example-7--direct-mcp-usage-no-copilot-host).
+
+The installer below auto-detects your OS and package manager and prints exact
+install commands for anything missing.
+
+---
+
+## 1. Install (one line)
 
 From the root of the project you want Personakit to live in:
 
@@ -70,21 +59,18 @@ curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scr
 iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.ps1 | iex
 ```
 
-What it does:
+The installer:
 
-1. Detects your OS and package manager (`brew` / `apt` / `dnf` / `pacman` /
-   `winget` / `choco` / `scoop` / …) and runs a **dependency check** for `git`,
-   `node` ≥ 18, and `npm`. If anything is missing, it prints an OS-specific
-   install hint and exits without touching your machine.
-2. Clones this repo into `./.personakit-plugin/`
-3. Runs `npm install` and builds `personakit-mcp`
+1. Detects your OS + package manager and **dependency-checks** `git`,
+   `node ≥ 18`, and `npm`. Missing tools? It prints an OS-specific install
+   command and exits without touching your machine.
+2. Clones the repo into `./.personakit-plugin/`.
+3. Runs `npm install` and builds `personakit-mcp`.
 4. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
-   existing one — prints a merge snippet instead)
-5. Reports whether an LLM credential is set (warn-only — Personakit needs
-   `GITHUB_MODELS_TOKEN`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` to run
-   persona generation).
+   existing one — prints a merge snippet instead).
+5. Reports whether an LLM credential is set.
 
-Optional environment variables before piping into your shell:
+Optional environment variables before the pipe:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -94,390 +80,136 @@ Optional environment variables before piping into your shell:
 
 > ⚠️ **Read before piping anything into your shell.** Inspect
 > [`scripts/install.sh`](./scripts/install.sh) and
-> [`scripts/install.ps1`](./scripts/install.ps1) first if your security policy
-> requires it.
+> [`scripts/install.ps1`](./scripts/install.ps1) first if your security
+> policy requires it.
 
-### Update to the latest version
+---
 
-Re-checks dependencies, fetches `origin/main`, and rebuilds only if there are
-new commits (or if `PERSONAKIT_FORCE=1`). Refuses to run if the plugin
-directory has uncommitted local changes.
-
-**macOS / Linux**
+## 2. Set your LLM credential
 
 ```bash
+# macOS / Linux
+export GITHUB_MODELS_TOKEN="<your token>"
+```
+
+```powershell
+# Windows
+$env:GITHUB_MODELS_TOKEN = "<your token>"
+```
+
+Reload your editor so it picks up the new MCP server registration.
+
+---
+
+## 3. Try it in Copilot Chat
+
+The skills auto-activate. Just talk to Copilot in plain English. Here's the
+canonical first-run sequence using the bundled
+[Tessera example](./examples/saas-project-management-tool/) (a fictional
+mid-market PM SaaS):
+
+```text
+You: Set up personakit using the example project at
+     examples/saas-project-management-tool.
+
+You: Generate 5 personas from the research-inputs folder.
+
+You: Interview Maya about an auto-Gantt feature idea.
+
+You: Run a panel with all 5 personas on auto-Gantt.
+
+You: Have the PM orchestrator produce pricing and a GTM plan.
+```
+
+Each step writes its artifacts under `./.personakit/` in your workspace
+(personas, transcripts, pricing drafts, GTM plans, audit log).
+
+> **What does the output actually look like?** See the seven worked transcripts
+> in [`ARCHITECTURE.md → Worked examples`](./ARCHITECTURE.md#worked-examples) —
+> they cover bootstrap, single-persona interviews, panel discussions, PM
+> orchestrator reviews, the GTM plan with the safety gate, what happens when
+> the safety gate fires, and direct MCP usage.
+
+---
+
+## 4. Update later
+
+Re-checks dependencies, fetches `origin/main`, and rebuilds only if there are
+new commits. Refuses to run if the plugin directory has uncommitted changes.
+
+```bash
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.sh | bash
 ```
 
-**Windows (PowerShell)**
-
 ```powershell
+# Windows
 iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.ps1 | iex
 ```
 
-### Health check (`doctor`)
+Set `PERSONAKIT_FORCE=1` to rebuild even when already up-to-date.
+
+---
+
+## 5. Health check (`doctor`)
 
 Read-only diagnostic. Reports on dependencies, LLM credentials, plugin clone
 state (incl. how many commits behind `origin/main` you are), build output,
-`.vscode/mcp.json` registration, and the contents of your `.personakit/`
-sandbox. Exits 0 when everything is green.
-
-**macOS / Linux**
+`.vscode/mcp.json` registration, and `.personakit/` sandbox stats. Exits 0
+when everything is green.
 
 ```bash
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/doctor.sh | bash
 ```
 
-**Windows (PowerShell)**
-
 ```powershell
+# Windows
 iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/doctor.ps1 | iex
 ```
 
-### Manual install
+---
 
-If you prefer to do it by hand:
-
-1. Clone the repo and install:
-
-   ```bash
-   git clone https://github.com/microsoftnorman/personakit.git
-   cd personakit
-   npm install
-   npm run build -w personakit-mcp
-   ```
-
-2. Install the plugin into Copilot (mirrors the upstream plugin install flow —
-   see [github/copilot-plugins](https://github.com/github/copilot-plugins)).
-
-3. Provide an LLM credential. Personakit auto-detects in this order:
-
-   - `GITHUB_MODELS_TOKEN` (recommended for Copilot users — no extra account)
-   - `OPENAI_API_KEY`
-   - `ANTHROPIC_API_KEY`
-
-4. Try the reference example:
-
-   ```
-   You: Set up personakit using the example project at
-        examples/saas-project-management-tool.
-   You: Generate 5 personas from the research-inputs folder.
-   You: Interview Maya about an auto-Gantt feature idea.
-   You: Run a panel with all 5 personas on auto-Gantt.
-   You: Have the PM orchestrator produce pricing and a GTM plan.
-   ```
-
-## Examples
-
-These are realistic Copilot-Chat transcripts using the bundled
-[Tessera](./examples/saas-project-management-tool/product-brief.md) reference
-example (a fictional mid-market PM SaaS). The actual outputs you'll see depend
-on the model, but the **shape** is contractual.
-
-### Example 1 — Bootstrap and persona generation
-
-```text
-You: Set up personakit using examples/saas-project-management-tool.
-
-Copilot (personakit-bootstrap skill):
-  ✓ Workspace: d:/personakit
-  ✓ Brief found: examples/saas-project-management-tool/product-brief.md
-    Summary: Tessera — mid-market PM SaaS, wedge is "one status update
-    propagates everywhere", competing with Asana/ClickUp/Linear/monday.
-  ✓ LLM credential: GITHUB_MODELS_TOKEN
-
-  Next step — say:
-    "Generate 5 personas using the research-inputs folder."
-
-────────────────────────────────────────────────────────────────────
-
-You: Generate 5 personas using the research-inputs folder. Required
-     archetypes: Mid-market Ops Director, Enterprise Senior Engineer,
-     Startup CFO, Solo Consultant, VP Product (mid-market).
-
-Copilot (personakit-generate-personas skill):
-  ▸ ingest_research → 4 files anonymized and stored
-      - analyst-snippet-mid-market-pm.md  (0 redactions)
-      - g2-style-reviews.md                (0 redactions)
-      - sales-call-signals.md              (0 redactions)
-      - competitive-landscape.md           (0 redactions)
-  ▸ generate_personas → 5 personas written:
-      1. Maya   — Mid-market Ops Director  (mid-market SaaS, 100-300)
-      2. Devin  — Enterprise Senior Engineer (enterprise tech, 1000+)
-      3. Priya  — Startup CFO              (Series B-D, 50-150)
-      4. Carlos — Solo Consultant          (freelance, 1)
-      5. Aisha  — VP Product (mid-market)  (mid-market SaaS, 200-500)
-
-  Each persona:
-    - dossier:    .personakit/personas/<id>.md
-    - structured: .personakit/personas/<id>.json
-    - 1:1 agent:  .personakit/agents/persona-<id>.agent.md
-```
-
-### Example 2 — Single-persona interview (sustained conversation)
-
-```text
-You: Interview Maya about auto-Gantt generated from existing task data.
-
-Copilot (personakit-interview skill → interview_persona):
-
-  Maya (Mid-market Ops Director):
-  > Honestly? Maybe. My team already lives in spreadsheets and we tried
-  > four Gantt tools in the last two years. The reason none stuck was
-  > onboarding — if I have to ask my PMs to learn another view, they'll
-  > revolt. If your auto-Gantt populates from the data we already enter
-  > and I can ship it without training, I'll pilot it. If it's a
-  > separate module with its own data model, no.
-
-  Session id: int-maya-20260507-141233-a8f2k1
-  Transcript: .personakit/transcripts/int-maya-20260507-141233-a8f2k1.md
-
-────────────────────────────────────────────────────────────────────
-
-You: Follow up in session int-maya-20260507-141233-a8f2k1: what would
-     change your mind on the "separate module" answer?
-
-Copilot (personakit-interview skill — same session, prior turn replayed):
-
-  Maya:
-  > Two things. One: the Gantt view has to write back to my source of
-  > truth. If I drag a bar in Gantt, the underlying ticket dates move.
-  > Two: I need a one-click "turn it off for my team" toggle that
-  > reverts cleanly. The last vendor we evaluated burned us because
-  > disabling the Gantt module left orphan dependencies in our data.
-```
-
-### Example 3 — Multi-persona panel discussion
-
-```text
-You: Run a panel with all 5 personas on auto-Gantt.
-
-Copilot (personakit-panel skill → panel_discussion, 3 rounds × 5 personas):
-
-  ## Themes
-  - Onboarding cost dominates adoption decisions across all 5 segments
-  - Integration depth (write-back to source) is non-negotiable
-  - AI features are tolerated when bundled, resented when up-charged
-
-  ## Agreements
-  - Auto-population from existing data is the only acceptable starting
-    point — no separate data model
-  - Disable/enable must be reversible without orphaned data
-
-  ## Disagreements
-  - Maya wants opt-in per team; Aisha wants default-on org-wide
-  - Priya wants it included in Business tier; Carlos wants a freemium tier
-  - Devin (enterprise) wants an audit trail of auto-generated changes;
-    Carlos (solo) calls that "ridiculous overhead"
-
-  ## Blockers
-  - No clear migration path from existing standalone Gantt tools
-  - Pricing posture conflicts directly with the Business-tier expectation
-    surfaced by 3 of 5 personas
-
-  Full transcript: .personakit/transcripts/panel-20260507-141512-3bk29x.md
-
-  Suggested follow-up:
-    "Have the PM orchestrator review auto-Gantt."
-```
-
-### Example 4 — PM Orchestrator review
-
-```text
-You: Have the PM orchestrator review auto-Gantt.
-
-Copilot (handoff to pm-orchestrator agent):
-
-  pm-orchestrator:
-    ▸ score_feature across [maya, devin, priya, carlos, aisha]
-        Maya:   7/10  willingness $10/seat  would recommend: yes
-        Devin:  5/10  "another module to maintain"  would recommend: no
-        Priya:  6/10  "include in base or no"  would recommend: maybe
-        Carlos: 4/10  "won't use; not in my workflow"  would recommend: no
-        Aisha:  8/10  "needs to be default-on"  would recommend: yes
-
-    ▸ produce_pricing → 3 tiers drafted
-        Recommendation: bundle into Business tier (moderate)
-
-    ▸ adversarial_review (4 dimensions)
-        market-fit:           CONCERN
-          "Two of five personas score under 6 and one outright rejects."
-        technical-feasibility: ACCEPT
-          "Uses existing data model; write-back is well-scoped."
-        strategic-alignment:   ACCEPT
-          "Fits the 2026 integrations-first roadmap."
-        customer-impact:       CONCERN
-          "Carlos segment outright rejects; week-2 plan ignores
-           onboarding cost surfaced in 3 of 5 personas."
-
-  Verdict: PROCEED WITH CHANGES.
-  Recommended next:
-    1. Address the Carlos-segment objection OR explicitly de-scope that
-       segment from launch.
-    2. Tighten the week-2 beta cohort to mid-market only (Maya/Aisha
-       look-alikes).
-    3. Then say "produce a GTM plan for auto-Gantt".
-```
-
-### Example 5 — GTM plan with mandatory adversarial gate
-
-```text
-You: Produce a GTM plan for auto-Gantt.
-
-Copilot (personakit-go-to-market skill):
-  ▸ produce_gtm
-    ✓ Plan drafted; gated until adversarial review runs.
-  ▸ adversarial_review (4 dimensions)
-    ✓ Status: passed-with-dissent — OK to present as DRAFT.
-
-  ## Positioning
-  Auto-Gantt closes the planning-tool gap mid-market PMs hit when
-  spreadsheets become the source of truth and competing Gantt tools
-  require re-entry. Timing: now, ahead of Asana's rumored Q3 release.
-
-  ## Pricing (recommendation: bundle into Business tier)
-  - conservative: $0, included in Business tier
-  - moderate: $10/seat add-on; attach 30% mid-market / 5% startup
-  - aggressive: $20/seat add-on; attach 12% mid-market / 0% startup
-
-  ## Launch sequence
-  - Week 1 (internal): sales talk track + CS troubleshooting guide
-  - Week 2 (beta): 10 mid-market customers from CS retention list;
-                   exit criteria: 4/10 enable in 14 days
-  - Week 3 (controlled): 25% rollout, instrument auto-population success
-                         rate; abort threshold: <60%
-  - Week 4 (GA): launch blog + email sequence + landing page
-
-  ## Competitive response
-  - Ignored:     double down on integrations narrative
-  - Copied:      lean on data-model depth and bug-bash track record
-  - Leapfrogged: pivot to AI-assisted re-planning as the v2 wedge
-
-  ## Risks
-  - cannibalization: pulls users off the standalone Gantt module
-    Mitigation: deprecate standalone after 6 months
-  - infrastructure-cost: auto-population is read-heavy
-    Mitigation: cap refresh frequency on conservative tier
-
-  ## Adversarial verdicts
-  - market-fit:     CONCERN — Carlos segment rejects (see PM review)
-  - customer-impact: CONCERN — week-2 plan does not address onboarding cost
-
-  Saved: .personakit/gtm/auto-gantt-gtm.md
-  Reminder: this is a DRAFT. Bring it to a human PM with judgment.
-```
-
-### Example 6 — When the safety gate fires
-
-This is what happens when every critic accepts the plan — Personakit refuses
-to present it, per the blog's "if every POC survives, your filter is broken"
-rule.
-
-```text
-You: Produce a GTM plan for the new "@-mention notifications" feature.
-
-Copilot (personakit-go-to-market skill):
-  ▸ produce_gtm
-    ✓ Plan drafted; gated until adversarial review runs.
-  ▸ adversarial_review (4 dimensions)
-    market-fit:           ACCEPT
-    technical-feasibility: ACCEPT
-    strategic-alignment:   ACCEPT
-    customer-impact:       ACCEPT
-
-  ⚠️  FilterTooLooseWarning: every critic accepted the plan.
-      Per Personakit safety policy, this plan WILL NOT be presented as-is.
-
-  Recommended actions:
-    1. Re-run with harder critics:
-       "adversarial_review for at-mention-notifications, dimensions:
-        market-fit-skeptic, security-auditor, churn-risk, support-load"
-    2. Or revise the plan first — the unanimous accept usually means the
-       plan is too vague to attack, not that the feature is uncontestable.
-```
-
-### Example 7 — Direct MCP usage (no Copilot host)
-
-If you just want the tools — not the skills/agents — you can call the MCP
-server directly with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+## Manual install (if you'd rather)
 
 ```bash
-# After: npm install && npm run build -w personakit-mcp
-$env:GITHUB_MODELS_TOKEN = "<your token>"
-$env:PERSONAKIT_WORKSPACE_ROOT = (Get-Location).Path
-npx @modelcontextprotocol/inspector node packages/personakit-mcp/dist/index.js
+git clone https://github.com/microsoftnorman/personakit.git
+cd personakit
+npm install
+npm run build -w personakit-mcp
 ```
 
-The Inspector shows all 11 tools with their JSON schemas. Try them in this
-order: `ingest_research` → `generate_personas` → `interview_persona` →
-`panel_discussion` → `score_feature` → `produce_pricing` → `produce_gtm` →
-`adversarial_review`.
+Then install the plugin into Copilot the same way you would any
+[github/copilot-plugins](https://github.com/github/copilot-plugins) plugin,
+and set one of the LLM credential env vars above.
 
-### What gets written to `.personakit/`
+---
 
-After running the full sequence above, the sandbox looks like:
+## Safety, in one paragraph
 
-```text
-.personakit/
-├── personas/
-│   ├── maya.md            ← narrative dossier (also the agent system prompt)
-│   ├── maya.json          ← structured fields
-│   ├── devin.md / .json
-│   ├── priya.md / .json
-│   ├── carlos.md / .json
-│   └── aisha.md / .json
-├── agents/                ← one custom Copilot agent per persona
-│   ├── persona-maya.agent.md
-│   └── …
-├── research/
-│   ├── tessera-mid-market-pm.json     ← structured MarketBrief
-│   └── tessera/
-│       ├── analyst-snippet-mid-market-pm.md  ← anonymized chunk
-│       └── …
-├── transcripts/
-│   ├── int-maya-….md          ← interview transcripts
-│   └── panel-….md / .json     ← panel transcripts + structured summary
-├── feedback/
-│   └── auto-gantt-scores.json
-├── gtm/
-│   ├── auto-gantt-pricing.json
-│   ├── auto-gantt-gtm.json    ← machine-readable plan
-│   └── auto-gantt-gtm.md      ← human-readable plan with verdicts
-└── audit/
-    └── 2026-05-07.jsonl       ← every MCP call, inputs/outputs scrubbed
-```
+Every artifact lives under `<workspace>/.personakit/` (the MCP server refuses
+writes outside it). Research is PII-anonymized before storage. Personas use
+demographic *ranges*, never real individuals. **No GTM plan is presented
+without surviving an adversarial-review gate** — and if every critic agrees,
+Personakit refuses to ship the plan ("if every POC survives, your filter is
+broken"). Every tool call is appended to a daily JSONL audit log with secrets
+scrubbed. None of these are flags; there is no "unsafe mode". Full design
+rationale in [`ARCHITECTURE.md → Safety guardrails`](./ARCHITECTURE.md#safety-guardrails).
 
-## Safety guardrails (baked in, not optional)
+---
 
-Per [*One Hundred POCs a Day → Do This Safely*](https://agentdrivendevelopment.com/one-hundred-pocs-a-day/):
+## Where to next
 
-- **Sandboxed filesystem.** All persona/research/transcript/GTM artifacts live
-  under `.personakit/` in your workspace. The MCP server refuses writes outside
-  that root.
-- **Anonymized synthetic personas only.** PII patterns in ingested research are
-  redacted before storage. Generated personas use demographic *ranges*, never
-  real individuals.
-- **Adversarial review is mandatory** before any GTM plan is presented. If every
-  critic agrees, Personakit raises a `FilterTooLooseWarning` instead of shipping
-  the plan.
-- **Full audit log.** Every MCP tool call appends to
-  `.personakit/audit/YYYY-MM-DD.jsonl` with inputs, outputs, and rationale.
-- **Drafts, not prophecy.** Pricing and GTM outputs are explicitly labeled as
-  starting-point drafts. Humans dispose; agents propose.
+| Want to… | Read |
+| --- | --- |
+| See realistic Copilot transcripts of the full flow | [`ARCHITECTURE.md → Worked examples`](./ARCHITECTURE.md#worked-examples) |
+| Understand the skill / agent / MCP-server split | [`ARCHITECTURE.md → System diagram`](./ARCHITECTURE.md#system-diagram) |
+| Browse the 11 tools and their schemas | [`ARCHITECTURE.md → Tool catalog`](./ARCHITECTURE.md#tool-catalog) |
+| See exactly what gets written to `.personakit/` | [`ARCHITECTURE.md → The .personakit/ sandbox`](./ARCHITECTURE.md#the-personakit-sandbox) |
+| Add a tool, skill, or agent | [`ARCHITECTURE.md → Extending Personakit`](./ARCHITECTURE.md#extending-personakit) |
+| Read the source pattern this plugin implements | [*One Hundred POCs a Day*](https://agentdrivendevelopment.com/one-hundred-pocs-a-day/) |
 
-## Layout
-
-```
-.
-├── .github/plugin/marketplace.json     # plugin registry
-├── plugins/personakit/
-│   ├── README.md
-│   ├── .mcp.json                       # registers personakit-mcp
-│   ├── skills/                         # 6 SKILL.md files
-│   └── agents/                         # 3 .agent.md files
-├── packages/personakit-mcp/            # the MCP server
-└── examples/saas-project-management-tool/
-```
+---
 
 ## License
 
