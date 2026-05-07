@@ -1,9 +1,13 @@
 # Personakit
 
 Synthetic-customer engine for GitHub Copilot — generate market-research-grounded
-persona agents, interview them, run multi-persona panels, and let a Product
-Manager Orchestrator agent turn the feedback into pricing and a complete
-go-to-market plan.
+persona agents, interview them, run multi-persona panels, and let a Persona
+Manager agent turn the feedback into pricing and a complete go-to-market plan.
+
+> The Persona Manager does the work a product manager would do, but it's named
+> for its actual job — managing the persona roster (create / list / update /
+> delete) and running synthetic-customer reviews on top of it. The name keeps
+> it from being confused with *your* PM.
 
 > ⚠️ **Public Preview.** APIs, file formats, and the `.agent.md` schema may change.
 
@@ -18,7 +22,7 @@ Personakit implements the *Synthetic Customers* + *Agents in Roles* pattern from
 | Generate personas | "Generate 5 personas for a mid-market PM SaaS tool" | Runs market research (live web + your supplied docs), synthesizes 5 anonymized persona dossiers, and clones a custom Copilot agent for each one. |
 | Interview a persona | "Ask Maya whether she'd use auto-Gantt" | Switches into Maya's custom agent for a sustained 1:1 conversation. |
 | Panel discussion | "Run a panel on auto-Gantt with all 5 personas" | Round-robin multi-persona discussion; returns the transcript plus a structured summary of agreements, disagreements, and blockers. |
-| PM review | "Have the PM orchestrator review auto-Gantt" | The `pm-orchestrator` agent invokes scoring + pricing tools, then runs `adversarial-pm` as a critic before presenting findings. |
+| PM review | "Have the persona manager review auto-Gantt" | The `persona-manager` agent invokes scoring + pricing tools, then runs `adversarial-critic` as a critic before presenting findings. |
 | Go-to-market | "Produce a GTM plan for auto-Gantt" | Positioning, 3-tier pricing with attach rates, 4-week launch sequence, 3-scenario competitive response, and risk analysis — gated by mandatory adversarial review. |
 
 ## Skills
@@ -45,9 +49,9 @@ Activated when the user wants multi-persona feedback on a topic or feature
 brief. Runs `panel_discussion` and renders the transcript plus structured
 summary.
 
-### `personakit-pm-review`
+### `personakit-persona-review`
 
-Activated when the user wants the PM Orchestrator agent to evaluate a feature.
+Activated when the user wants the Persona Manager agent to evaluate a feature.
 Runs `score_feature` across personas, drafts pricing, and **always** runs
 `adversarial_review` before presenting.
 
@@ -62,15 +66,15 @@ mandatorily `adversarial_review`. If every critic agrees, raises a
 
 | Agent | Role |
 | ----- | ---- |
-| `pm-orchestrator` | User-facing product manager. Drives end-to-end reviews. Has access to all `personakit-*` MCP tools and can invoke persona subagents. |
-| `adversarial-pm` | Devil's advocate. Read-only + critique. Always argues against the feature. Required by the GTM gate. |
+| `persona-manager` | Owns the persona roster (create / list / update / delete) and drives end-to-end product reviews on top of it. Not your PM — a synthetic-customer manager. Has access to all `personakit-*` MCP tools and can invoke persona subagents. |
+| `adversarial-critic` | Devil's advocate. Read-only + critique. Always argues against the feature. Required by the GTM gate. |
 | `persona-template` | Template that the generator clones into `.personakit/agents/<persona-id>.agent.md` for each persona. The persona's dossier is embedded as the agent's system prompt. |
 
 ## MCP server
 
 Personakit ships a TypeScript / Node MCP server (`personakit-mcp`) registered
 via [`.mcp.json`](./.mcp.json). It owns the `.personakit/` filesystem sandbox,
-the LLM client, and 10 tools.
+the LLM client, and 13 tools.
 
 ### GitHub Copilot credential (auto-detected, in order)
 

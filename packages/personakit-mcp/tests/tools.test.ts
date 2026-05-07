@@ -1,11 +1,16 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Audit } from "../src/audit.js";
 import { Store } from "../src/store/index.js";
 import { MockLlmClient } from "../src/llm/client.js";
-import { generatePersonas } from "../src/tools/personas.js";
+import {
+  deletePersona,
+  generatePersonas,
+  updatePersona,
+} from "../src/tools/personas.js";
 import { panelDiscussion } from "../src/tools/panel.js";
 import { produceGtm } from "../src/tools/gtm.js";
 import { adversarialReview } from "../src/tools/gtm.js";
@@ -301,5 +306,142 @@ describe("personas + panel + GTM happy path", () => {
     });
 
     expect(out.plan.adversarialReview.status).toBe("killed");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// update_persona + delete_persona
+// ─────────────────────────────────────────────────────────────────────────────
+
+const minimalPersonaJson = (id: string, displayName: string) =>
+  "```json\n" +
+  JSON.stringify({
+    personas: [
+      {
+        id,
+        displayName,
+        archetype: "Mid-market Ops Director",
+        segment: "mid-market SaaS",
+        demographics: {
+          ageRange: "38-46",
+          geographyRange: "major US metros",
+          companySizeRange: "100-300",
+          role: "Operations Director",
+          seniority: "Director",
+        },
+        background: "Twenty-year ops career across two SaaS scale-ups.",
+        jobsToBeDone: ["keep PM tool in sync", "report status weekly"],
+        decisionCriteria: ["onboarding cost", "integrations"],
+        biases: ["distrusts ai-as-magic"],
+        communicationStyle: "Direct.",
+        antiPatterns: ["another module to manage"],
+        sampleObjections: [
+          "if onboarding > 1 sprint, no",
+          "needs to write back to source",
+          "won't pay for AI separately",
+        ],
+        toolsAndStack: ["Linear", "Asana", "Slack"],
+        buyingAuthority: "buyer",
+        generatedFromResearch: ["analyst-snippet"],
+      },
+    ],
+  }) +
+  "\n```";
+
+describe("update_persona + delete_persona", () => {
+  let tmp: string;
+
+  beforeEach(async () => {
+    tmp = mkdtempSync(path.join(os.tmpdir(), "personakit-crud-test-"));
+    const store = new Store({ workspaceRoot: tmp });
+    await store.init();
+  });
+
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("update_persona patches fields and rewrites dossier + agent", async () => {
+    const seed = new MockLlmClient(() => minimalPersonaJson("maya", "Maya"));
+    await generatePersonas(ctx(tmp, seed), {
+      productBrief: "Tessera — mid-market PM SaaS",
+      count: 1,
+    });
+
+    const updated = await updatePersona(ctx(tmp, seed), {
+      personaId: "maya",
+      patch: {
+        displayName: "Maya Lin",
+        decisionCriteria: ["onboarding cost", "integrations", "ai cost"],
+      },
+    });
+
+    expect(updated.changedFields.sort()).toEqual(
+      ["decisionCriteria", "displayName"].sort(),
+    );
+    expect(updated.persona.displayName).toBe("Maya Lin");
+    expect(updated.persona.decisionCriteria).toContain("ai cost");
+
+    // Re-rendered dossier reflects the new name.
+    const dossier = await fs.readFile(updated.paths.dossier, "utf8");
+    expect(dossier).toContain("Maya Lin");
+
+    // Re-rendered agent file reflects the new name.
+    const agentMd = await fs.readFile(updated.paths.agent, "utf8");
+    expect(agentMd).toContain("Maya Lin");
+  });
+
+  it("update_persona reports no changes when patch is identical", async () => {
+    const seed = new MockLlmClient(() => minimalPersonaJson("maya", "Maya"));
+    await generatePersonas(ctx(tmp, seed), {
+      productBrief: "Tessera",
+      count: 1,
+    });
+
+    const out = await updatePersona(ctx(tmp, seed), {
+      personaId: "maya",
+      patch: { displayName: "Maya" },
+    });
+    expect(out.changedFields).toEqual([]);
+  });
+
+  it("update_persona throws on unknown persona", async () => {
+    const seed = new MockLlmClient(() => "");
+    await expect(
+      updatePersona(ctx(tmp, seed), {
+        personaId: "ghost",
+        patch: { displayName: "Anyone" },
+      }),
+    ).rejects.toThrow(/No persona with id 'ghost'/);
+  });
+
+  it("delete_persona removes all three files when confirm=true", async () => {
+    const seed = new MockLlmClient(() => minimalPersonaJson("devin", "Devin"));
+    const gen = await generatePersonas(ctx(tmp, seed), {
+      productBrief: "Tessera",
+      count: 1,
+    });
+    const paths = gen.paths[0]!;
+
+    const out = await deletePersona(ctx(tmp, seed), {
+      personaId: "devin",
+      confirm: true,
+    });
+
+    expect(out.removed).toEqual({
+      dossier: true,
+      structured: true,
+      agent: true,
+    });
+    await expect(fs.access(paths.dossier)).rejects.toThrow();
+    await expect(fs.access(paths.structured)).rejects.toThrow();
+    await expect(fs.access(paths.agent)).rejects.toThrow();
+  });
+
+  it("delete_persona throws on unknown persona", async () => {
+    const seed = new MockLlmClient(() => "");
+    await expect(
+      deletePersona(ctx(tmp, seed), { personaId: "ghost", confirm: true }),
+    ).rejects.toThrow(/No persona with id 'ghost'/);
   });
 });

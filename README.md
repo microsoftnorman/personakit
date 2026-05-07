@@ -17,9 +17,11 @@ see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 ## What you get
 
 - **6 skills** that auto-activate in Copilot Chat (bootstrap, generate
-  personas, interview, panel, PM review, go-to-market).
-- **3 custom agents** — a `pm-orchestrator`, an `adversarial-pm`, and a
-  `persona-template` that's cloned per generated persona so you can chat 1:1.
+  personas, interview, panel, persona review, go-to-market).
+- **3 custom agents** — a `persona-manager` (owns the persona roster and
+  drives end-to-end reviews — named so it isn't confused with *your* PM),
+  an `adversarial-critic`, and a `persona-template` that's cloned per
+  generated persona so you can chat 1:1.
 - **`personakit-mcp`** — an MCP server that owns the sandboxed persona store,
   research ingestion, panel orchestration, scoring, pricing synthesis, and
   GTM plan generation.
@@ -123,7 +125,7 @@ You: Interview Maya about an auto-Gantt feature idea.
 
 You: Run a panel with all 5 personas on auto-Gantt.
 
-You: Have the PM orchestrator produce pricing and a GTM plan.
+You: Have the persona manager produce pricing and a GTM plan.
 ```
 
 Each step writes its artifacts under `./.personakit/` in your workspace

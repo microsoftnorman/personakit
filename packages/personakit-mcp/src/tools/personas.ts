@@ -347,3 +347,151 @@ export async function getPersona(
 ): Promise<Persona> {
   return ctx.store.readJson<Persona>("personas", `${input.personaId}.json`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// update_persona
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Partial-update schema: every field of Persona is optional except `id` is
+ * implicit (passed separately). We deliberately re-export the Persona shape
+ * here as a zod object so we can `.partial()` it without leaking
+ * implementation details.
+ */
+const PersonaPatchSchema = PersonaSchema.partial().omit({ id: true });
+
+export const UpdatePersonaInput = z.object({
+  personaId: z.string(),
+  patch: PersonaPatchSchema.describe(
+    "Fields to overwrite on the persona. Anything omitted is left as-is.",
+  ),
+});
+export type UpdatePersonaInput = z.infer<typeof UpdatePersonaInput>;
+
+export interface UpdatePersonaOutput {
+  persona: Persona;
+  changedFields: string[];
+  paths: { dossier: string; structured: string; agent: string };
+}
+
+/**
+ * Apply a partial update to a persona. Re-renders the dossier and the
+ * Copilot agent file so they stay in sync with the structured record.
+ */
+export async function updatePersona(
+  ctx: ToolContext,
+  input: UpdatePersonaInput,
+): Promise<UpdatePersonaOutput> {
+  const filename = `${input.personaId}.json`;
+  if (!(await ctx.store.exists("personas", filename))) {
+    throw new Error(
+      `No persona with id '${input.personaId}'. Use list_personas to see the roster.`,
+    );
+  }
+  const current = PersonaSchema.parse(
+    await ctx.store.readJson("personas", filename),
+  );
+
+  // Shallow-merge top-level fields, with a one-level-deep merge for `demographics`.
+  const merged: Persona = PersonaSchema.parse({
+    ...current,
+    ...input.patch,
+    demographics: {
+      ...current.demographics,
+      ...(input.patch.demographics ?? {}),
+    },
+    id: current.id,
+  });
+
+  const changedFields = computeChangedFields(current, merged);
+  if (changedFields.length === 0) {
+    return {
+      persona: current,
+      changedFields,
+      paths: {
+        dossier: ctx.store.resolve("personas", `${current.id}.md`),
+        structured: ctx.store.resolve("personas", `${current.id}.json`),
+        agent: ctx.store.resolve("agents", `persona-${current.id}.agent.md`),
+      },
+    };
+  }
+
+  const dossierText = renderDossier(merged);
+  // PII defence-in-depth: rescan the rerendered dossier.
+  const dossierToWrite = looksAnonymized(dossierText)
+    ? dossierText
+    : anonymize(dossierText).text;
+
+  const structured = await ctx.store.writeJson("personas", filename, merged);
+  const dossier = await ctx.store.writeText(
+    "personas",
+    `${merged.id}.md`,
+    dossierToWrite,
+  );
+  const agent = await writePersonaAgent(ctx, merged, dossierToWrite);
+
+  return {
+    persona: merged,
+    changedFields,
+    paths: { dossier, structured, agent },
+  };
+}
+
+function computeChangedFields(before: Persona, after: Persona): string[] {
+  const changed: string[] = [];
+  for (const key of Object.keys(after) as Array<keyof Persona>) {
+    if (key === "id") continue;
+    const a = JSON.stringify(before[key]);
+    const b = JSON.stringify(after[key]);
+    if (a !== b) changed.push(String(key));
+  }
+  return changed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// delete_persona
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DeletePersonaInput = z.object({
+  personaId: z.string(),
+  /**
+   * Required confirmation flag. The skill / Persona Manager agent must set
+   * this to `true` after explicit user confirmation. Without it, the tool
+   * refuses — preventing an LLM from accidentally deleting the roster.
+   */
+  confirm: z
+    .literal(true)
+    .describe(
+      "Must be exactly true. Caller is responsible for confirming with the user first.",
+    ),
+});
+export type DeletePersonaInput = z.infer<typeof DeletePersonaInput>;
+
+export interface DeletePersonaOutput {
+  personaId: string;
+  removed: { dossier: boolean; structured: boolean; agent: boolean };
+}
+
+/**
+ * Delete a persona's three files: dossier (.md), structured record (.json),
+ * and the Copilot custom agent file (agents/persona-<id>.agent.md). All
+ * three deletes are reported individually so the caller can audit which
+ * actually existed.
+ */
+export async function deletePersona(
+  ctx: ToolContext,
+  input: DeletePersonaInput,
+): Promise<DeletePersonaOutput> {
+  const id = input.personaId;
+  if (!(await ctx.store.exists("personas", `${id}.json`))) {
+    throw new Error(
+      `No persona with id '${id}'. Use list_personas to see the roster.`,
+    );
+  }
+  const removed = {
+    dossier: await ctx.store.deleteFile("personas", `${id}.md`),
+    structured: await ctx.store.deleteFile("personas", `${id}.json`),
+    agent: await ctx.store.deleteFile("agents", `persona-${id}.agent.md`),
+  };
+  return { personaId: id, removed };
+}

@@ -29,12 +29,12 @@ feature.
 
 Run a panel with all 5 personas on auto-Gantt.
 
-Have the PM orchestrator review auto-Gantt.
+Have the persona manager review auto-Gantt.
 
 Produce a GTM plan for auto-Gantt.
 ```
 
-After step 4 the PM orchestrator should call `score_feature`,
+After step 4 the persona manager should call `score_feature`,
 `produce_pricing`, and `adversarial_review`. After step 5 it should call
 `produce_gtm` then mandatorily `adversarial_review` again. The final GTM
 markdown lands at `.personakit/gtm/auto-gantt-gtm.md`.

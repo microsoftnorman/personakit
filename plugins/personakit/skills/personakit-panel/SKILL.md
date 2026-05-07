@@ -81,8 +81,8 @@ Agent: Calling panel_discussion across [maya, devin, priya, carlos, aisha],
     .personakit/transcripts/panel-20260507-141512-3bk29x.md
 
   Suggested follow-up:
-    Ask the PM Orchestrator to evaluate this feature
-    (skill: personakit-pm-review).
+    Ask the Persona Manager to evaluate this feature
+    (skill: personakit-persona-review).
 ```
 
 ## Safety notes

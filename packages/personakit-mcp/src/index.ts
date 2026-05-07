@@ -2,10 +2,11 @@
 /**
  * Personakit MCP server.
  *
- * Exposes 10 tools to Copilot:
+ * Exposes 13 tools to Copilot:
  *   research_market, ingest_research, generate_personas, list_personas,
- *   get_persona, interview_persona, panel_discussion, score_feature,
- *   produce_pricing, produce_gtm, adversarial_review.
+ *   get_persona, update_persona, delete_persona, interview_persona,
+ *   panel_discussion, score_feature, produce_pricing, produce_gtm,
+ *   adversarial_review.
  *
  * Transport: stdio (per MCP spec). Configured by plugins/personakit/.mcp.json
  * to be launched as `npx personakit-mcp` by the Copilot host.
@@ -36,9 +37,13 @@ import {
   GeneratePersonasInput,
   GetPersonaInput,
   ListPersonasInput,
+  UpdatePersonaInput,
+  DeletePersonaInput,
   generatePersonas,
   getPersona,
   listPersonas,
+  updatePersona,
+  deletePersona,
 } from "./tools/personas.js";
 import {
   InterviewPersonaInput,
@@ -96,6 +101,22 @@ const TOOLS: ToolDef[] = [
     description: "Fetch one persona's structured record by id.",
     inputSchema: GetPersonaInput,
     handler: (ctx, input) => getPersona(ctx, GetPersonaInput.parse(input)),
+  },
+  {
+    name: "update_persona",
+    description:
+      "Apply a partial update to an existing persona. Re-renders the dossier and the Copilot agent file so they stay in sync. The caller (typically the persona-manager agent) is responsible for showing the user a diff and getting confirmation before calling.",
+    inputSchema: UpdatePersonaInput,
+    handler: (ctx, input) =>
+      updatePersona(ctx, UpdatePersonaInput.parse(input)),
+  },
+  {
+    name: "delete_persona",
+    description:
+      "Delete a persona and its three files (dossier .md, structured .json, custom-agent .agent.md). Requires confirm=true; the caller MUST get explicit user confirmation first. Failing to confirm is a safety-policy violation.",
+    inputSchema: DeletePersonaInput,
+    handler: (ctx, input) =>
+      deletePersona(ctx, DeletePersonaInput.parse(input)),
   },
   {
     name: "interview_persona",

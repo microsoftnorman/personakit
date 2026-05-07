@@ -58,12 +58,12 @@ Four ideas drive every design choice:
 │                                                                │
 │  user ──► skill (auto-activates on prompt)                     │
 │            │                                                   │
-│            ├──► pm-orchestrator agent                          │
+│            ├──► persona-manager agent                          │
 │            │       │                                           │
 │            │       ├─ runSubagent(persona-maya)  ──┐           │
 │            │       ├─ runSubagent(persona-devin) ──┤  panel    │
 │            │       ├─ runSubagent(persona-priya) ──┤           │
-│            │       ├─ runSubagent(adversarial-pm) ─┘           │
+│            │       ├─ runSubagent(adversarial-critic) ─┘       │
 │            │       │                                           │
 │            │       └─ MCP tools: research_market,              │
 │            │           generate_personas, panel_discussion,    │
@@ -80,7 +80,7 @@ Three layers:
 - **Skills** (markdown, auto-activated by Copilot) — the entry points the user
   triggers with natural language.
 - **Agents** (markdown system-prompts spawned via `runSubagent`) — the long-
-  running roles: PM orchestrator, adversarial PM, and one cloned persona
+  running roles: Persona Manager, adversarial critic, and one cloned persona
   template per generated persona.
 - **MCP server** (TypeScript / Node, stdio transport) — owns state, runs the
   LLM calls, enforces the sandbox + audit + adversarial gate.
@@ -115,18 +115,20 @@ a SKILL.md with YAML frontmatter (`name`, `description`, `allowed-tools`).
 | `personakit-generate-personas` | "generate personas", "create synthetic customers" | Calls `ingest_research` then `generate_personas`. Writes `.md` + `.json` + per-persona `.agent.md`. |
 | `personakit-interview` | "interview <persona>", "ask <persona> about …" | Calls `interview_persona`, supports `session_id` for sustained multi-turn conversations. |
 | `personakit-panel` | "run a panel", "panel discussion on …" | Calls `panel_discussion` (N rounds × M personas), returns themes / agreements / disagreements / blockers. |
-| `personakit-pm-review` | "have the PM orchestrator review …" | Hands off to the `pm-orchestrator` agent. |
+| `personakit-persona-review` | "have the persona manager review …" | Hands off to the `persona-manager` agent. |
 | `personakit-go-to-market` | "produce a GTM plan for …" | Calls `produce_gtm`, then enforces the adversarial-review gate before presenting anything. |
 
 ### Agents
 
 Three `.agent.md` files in [`plugins/personakit/agents/`](./plugins/personakit/agents/):
 
-- **`pm-orchestrator`** — long-running PM-in-residence. Drives end-to-end
+- **`persona-manager`** — long-running owner of the synthetic-customer roster.
+  Handles persona CRUD (create / list / update / delete) AND drives end-to-end
   reviews: pulls personas, runs panels, scores the feature, drafts pricing,
-  invokes the adversarial PM, and only *then* offers a verdict.
-- **`adversarial-pm`** — exists only to argue against the feature. Returns one
-  of `accept` / `concern` / `kill` per dimension (market-fit,
+  invokes the adversarial critic, and only *then* offers a verdict. Named so
+  it isn't confused with the user's actual product manager.
+- **`adversarial-critic`** — exists only to argue against the feature. Returns
+  one of `accept` / `concern` / `kill` per dimension (market-fit,
   technical-feasibility, strategic-alignment, customer-impact, plus any
   user-supplied dimensions).
 - **`persona-template`** — the system prompt every generated persona is cloned
@@ -237,7 +239,7 @@ user ──► personakit-interview skill ── interview_persona ──► tra
 
 user ──► personakit-panel skill ── panel_discussion ──► panel-….md + .json
 
-user ──► personakit-pm-review skill ─► pm-orchestrator agent
+user ──► personakit-persona-review skill ─► persona-manager agent
            ├─► score_feature           per-persona scores
            ├─► produce_pricing         three-tier draft
            └─► adversarial_review      4 critic dimensions
@@ -526,17 +528,17 @@ Copilot (personakit-panel skill → panel_discussion, 3 rounds × 5 personas):
   Full transcript: .personakit/transcripts/panel-20260507-141512-3bk29x.md
 
   Suggested follow-up:
-    "Have the PM orchestrator review auto-Gantt."
+    "Have the persona manager review auto-Gantt."
 ```
 
-### Example 4 — PM Orchestrator review
+### Example 4 — Persona Manager review
 
 ```text
-You: Have the PM orchestrator review auto-Gantt.
+You: Have the persona manager review auto-Gantt.
 
-Copilot (handoff to pm-orchestrator agent):
+Copilot (handoff to persona-manager agent):
 
-  pm-orchestrator:
+  persona-manager:
     ▸ score_feature across [maya, devin, priya, carlos, aisha]
         Maya:   7/10  willingness $10/seat  would recommend: yes
         Devin:  5/10  "another module to maintain"  would recommend: no

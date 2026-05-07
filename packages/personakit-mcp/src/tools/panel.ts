@@ -6,7 +6,7 @@
  * persona-vs-persona text rather than one model narrating multiple voices.
  *
  * For users who want to escalate to "real" agent-to-agent chat, the
- * pm-orchestrator agent can instead invoke each persona's custom Copilot
+ * persona-manager agent can instead invoke each persona's custom Copilot
  * subagent via runSubagent. This MCP-side panel is the lighter-weight default.
  */
 import { z } from "zod";

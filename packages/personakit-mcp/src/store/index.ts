@@ -118,4 +118,20 @@ export class Store {
       return false;
     }
   }
+
+  /**
+   * Delete a file inside the sandbox. Returns true if the file existed and
+   * was removed, false if it didn't exist. The path-traversal guard still
+   * applies via `resolve`.
+   */
+  async deleteFile(subdir: Subdir, relPath: string): Promise<boolean> {
+    const full = this.resolve(subdir, relPath);
+    try {
+      await fs.unlink(full);
+      return true;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw err;
+    }
+  }
 }

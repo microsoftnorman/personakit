@@ -29,7 +29,7 @@ that is out of scope for this plugin.
 | --------- | ------ |
 | "Produce a GTM plan for auto-Gantt" | Run this skill |
 | "What's our launch sequence for the new pricing tier?" | Run this skill |
-| "Just score it across personas" | Use `personakit-pm-review` instead |
+| "Just score it across personas" | Use `personakit-persona-review` instead |
 | "Don't bother with critique, just give me a plan" | Refuse — adversarial review is non-negotiable |
 
 ## Common Scenarios
@@ -43,7 +43,7 @@ that is out of scope for this plugin.
 ## Steps
 
 1. Confirm the feature brief and pricing draft. If pricing has not been
-   produced, run `personakit-pm-review` first or call `produce_pricing`
+   produced, run `personakit-persona-review` first or call `produce_pricing`
    directly.
 2. Call `produce_gtm` with the feature, pricing, and persona scores.
 3. **Always** call `adversarial_review` on the saved plan immediately after.
