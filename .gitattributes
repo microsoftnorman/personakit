@@ -1,0 +1,10 @@
+# Force LF line endings on shell scripts so they work on macOS/Linux
+# even when committed from Windows checkouts.
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# PowerShell stays as-is (works with either ending).
+*.ps1       text
+
+# Default text handling.
+*           text=auto

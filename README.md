@@ -72,10 +72,17 @@ iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scri
 
 What it does:
 
-1. Clones this repo into `./.personakit-plugin/`
-2. Runs `npm install` and builds `personakit-mcp`
-3. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
+1. Detects your OS and package manager (`brew` / `apt` / `dnf` / `pacman` /
+   `winget` / `choco` / `scoop` / …) and runs a **dependency check** for `git`,
+   `node` ≥ 18, and `npm`. If anything is missing, it prints an OS-specific
+   install hint and exits without touching your machine.
+2. Clones this repo into `./.personakit-plugin/`
+3. Runs `npm install` and builds `personakit-mcp`
+4. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
    existing one — prints a merge snippet instead)
+5. Reports whether an LLM credential is set (warn-only — Personakit needs
+   `GITHUB_MODELS_TOKEN`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` to run
+   persona generation).
 
 Optional environment variables before piping into your shell:
 
@@ -89,6 +96,43 @@ Optional environment variables before piping into your shell:
 > [`scripts/install.sh`](./scripts/install.sh) and
 > [`scripts/install.ps1`](./scripts/install.ps1) first if your security policy
 > requires it.
+
+### Update to the latest version
+
+Re-checks dependencies, fetches `origin/main`, and rebuilds only if there are
+new commits (or if `PERSONAKIT_FORCE=1`). Refuses to run if the plugin
+directory has uncommitted local changes.
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.sh | bash
+```
+
+**Windows (PowerShell)**
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.ps1 | iex
+```
+
+### Health check (`doctor`)
+
+Read-only diagnostic. Reports on dependencies, LLM credentials, plugin clone
+state (incl. how many commits behind `origin/main` you are), build output,
+`.vscode/mcp.json` registration, and the contents of your `.personakit/`
+sandbox. Exits 0 when everything is green.
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/doctor.sh | bash
+```
+
+**Windows (PowerShell)**
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/doctor.ps1 | iex
+```
 
 ### Manual install
 

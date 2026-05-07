@@ -19,59 +19,71 @@ $RepoUrl   = 'https://github.com/microsoftnorman/personakit.git'
 $TargetDir = if ($env:PERSONAKIT_DIR) { $env:PERSONAKIT_DIR } else { '.\.personakit-plugin' }
 $GitRef    = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
 
-function Write-Bold($msg) { Write-Host $msg -ForegroundColor White }
-function Write-Info($msg) { Write-Host "  ▸ $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)   { Write-Host "  ✓ $msg" -ForegroundColor Green }
-function Write-Warn2($msg){ Write-Host "  ! $msg" -ForegroundColor Yellow }
-function Fail($msg)       { Write-Host "  ✗ $msg" -ForegroundColor Red; exit 1 }
+# ─── Source shared lib ──────────────────────────────────────────────────────
+$ScriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { '' }
+if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'lib\common.ps1'))) {
+    . (Join-Path $ScriptDir 'lib\common.ps1')
+} else {
+    $commonUrl = "https://raw.githubusercontent.com/microsoftnorman/personakit/$GitRef/scripts/lib/common.ps1"
+    try {
+        $commonContent = (Invoke-WebRequest -UseBasicParsing -Uri $commonUrl).Content
+    } catch {
+        Write-Host "  ✗ Could not fetch shared lib from $commonUrl" -ForegroundColor Red
+        exit 1
+    }
+    Invoke-Expression $commonContent
+}
 
-Write-Bold 'Personakit installer'
+Write-PkBold 'Personakit installer'
+Write-Host ''
+Write-PkInfo "Detected package manager: $(Get-PkPkgManager)"
 Write-Host ''
 
-# ─── Prereq checks ──────────────────────────────────────────────────────────
-foreach ($cmd in 'git', 'node', 'npm') {
-    if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-        Fail "$cmd is required but not found in PATH."
-    }
+# ─── Dependency check ───────────────────────────────────────────────────────
+Write-PkBold 'Checking dependencies'
+if (-not (Test-PkAllDeps)) {
+    Write-Host ''
+    Write-PkErr 'Dependency check failed. Install the missing tools above and re-run.'
+    exit 1
 }
-
-$nodeMajor = [int](node -p 'process.versions.node.split(".")[0]')
-if ($nodeMajor -lt 18) {
-    Fail "Node.js 18+ required (have $(node -v))."
-}
-$nodeVer = node -v
-$gitVer  = (git --version).Split(' ')[2]
-Write-Ok "Prerequisites OK (node $nodeVer, git $gitVer)"
+Write-Host ''
 
 # ─── Clone or update ────────────────────────────────────────────────────────
+Write-PkBold 'Fetching source'
 if (Test-Path (Join-Path $TargetDir '.git')) {
-    Write-Info "Updating existing clone at $TargetDir"
+    Write-PkInfo "Updating existing clone at $TargetDir"
     git -C $TargetDir fetch --quiet origin $GitRef
     git -C $TargetDir checkout --quiet $GitRef
     git -C $TargetDir pull --ff-only --quiet origin $GitRef
-    Write-Ok "Updated to latest $GitRef"
+    Write-PkOk "Updated to latest $GitRef"
 } else {
-    Write-Info "Cloning $RepoUrl into $TargetDir"
+    Write-PkInfo "Cloning $RepoUrl into $TargetDir"
     git clone --quiet --branch $GitRef --depth 1 $RepoUrl $TargetDir
-    Write-Ok 'Cloned'
+    Write-PkOk 'Cloned'
 }
+Write-Host ''
 
 # ─── Install + build ────────────────────────────────────────────────────────
+Write-PkBold 'Installing & building'
 Push-Location $TargetDir
 try {
-    Write-Info 'Installing dependencies (this may take a minute)…'
+    Write-PkInfo 'npm install (this may take a minute)…'
     npm install --silent --no-audit --no-fund | Out-Null
-    Write-Ok 'Dependencies installed'
+    Write-PkOk 'Dependencies installed'
 
-    Write-Info 'Building personakit-mcp'
+    Write-PkInfo 'Building personakit-mcp'
     npm run --silent build -w personakit-mcp | Out-Null
-    Write-Ok 'Built'
+    Write-PkOk 'Built'
 } finally {
     Pop-Location
 }
+Write-Host ''
 
 # ─── Write .vscode/mcp.json ────────────────────────────────────────────────
-if ($env:PERSONAKIT_NO_VSCODE -ne '1') {
+Write-PkBold 'Editor configuration'
+if ($env:PERSONAKIT_NO_VSCODE -eq '1') {
+    Write-PkInfo 'Skipping .vscode\mcp.json (PERSONAKIT_NO_VSCODE=1)'
+} else {
     if (-not (Test-Path '.vscode')) { New-Item -ItemType Directory -Path '.vscode' | Out-Null }
 
     $absMcp = (Resolve-Path (Join-Path $TargetDir 'packages/personakit-mcp/dist/index.js')).Path -replace '\\','/'
@@ -92,33 +104,41 @@ if ($env:PERSONAKIT_NO_VSCODE -ne '1') {
 "@
 
     if (Test-Path '.vscode/mcp.json') {
-        Write-Warn2 '.vscode/mcp.json already exists — leaving it alone.'
-        Write-Warn2 'Merge this entry manually under "servers":'
+        Write-PkWarn '.vscode\mcp.json already exists — leaving it alone.'
+        Write-PkDim 'Merge this entry manually under "servers":'
         Write-Host ''
         Write-Host $entry
     } else {
         Set-Content -Path '.vscode/mcp.json' -Value $entry -Encoding UTF8
-        Write-Ok 'Wrote .vscode/mcp.json'
+        Write-PkOk 'Wrote .vscode\mcp.json'
     }
 }
-
 Write-Host ''
-Write-Bold 'Done.'
+
+# ─── LLM credential check (warn-only) ──────────────────────────────────────
+Write-PkBold 'LLM credential'
+Test-PkLlmCredential
+Write-Host ''
+
+# ─── Done ──────────────────────────────────────────────────────────────────
+Write-PkBold 'Done.'
 Write-Host ''
 Write-Host '  Next steps:'
-Write-Host '    1. Set an LLM credential. Personakit auto-detects, in order:'
-Write-Host '         GITHUB_MODELS_TOKEN  (recommended for Copilot users)'
-Write-Host '         OPENAI_API_KEY'
-Write-Host '         ANTHROPIC_API_KEY'
-Write-Host ''
-Write-Host '       Example: $env:GITHUB_MODELS_TOKEN = "<your token>"'
+Write-Host '    1. Set an LLM credential if you haven''t yet:'
+Write-Host '         $env:GITHUB_MODELS_TOKEN = "<your token>"'
 Write-Host ''
 Write-Host '    2. Reload your editor (VS Code Insiders + Copilot Chat recommended).'
 Write-Host ''
 Write-Host '    3. In Copilot Chat, try:'
 Write-Host '         "Generate 5 synthetic personas for <your product brief>."'
 Write-Host ''
-Write-Host "  Plugin location: $TargetDir"
-Write-Host "  Skills + agents: $TargetDir\plugins\personakit\"
-Write-Host "  Reference example: $TargetDir\examples\saas-project-management-tool\"
+Write-Host "  Plugin location:    $TargetDir"
+Write-Host "  Skills + agents:    $TargetDir\plugins\personakit\"
+Write-Host "  Reference example:  $TargetDir\examples\saas-project-management-tool\"
+Write-Host ''
+Write-Host '  To check for updates later:'
+Write-Host '    iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.ps1 | iex'
+Write-Host ''
+Write-Host '  To run a health check:'
+Write-Host '    iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/doctor.ps1 | iex'
 Write-Host ''
