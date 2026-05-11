@@ -149,8 +149,9 @@ Each step writes its artifacts under `./.personakit/` in your workspace
 
 ## 4. Update later
 
-Re-checks dependencies, fetches `origin/main`, and rebuilds only if there are
-new commits. Refuses to run if the plugin directory has uncommitted changes.
+Re-runs the dependency check, then re-downloads + rebuilds. Short-circuits
+as a no-op when the install dir's recorded `ref` already matches
+`PERSONAKIT_REF` (set `PERSONAKIT_FORCE=1` to re-download anyway).
 
 ```bash
 # macOS / Linux
@@ -168,10 +169,10 @@ Set `PERSONAKIT_FORCE=1` to rebuild even when already up-to-date.
 
 ## 5. Health check (`doctor`)
 
-Read-only diagnostic. Reports on dependencies, LLM access (sampling default; fallback tokens if set), plugin clone
-state (incl. how many commits behind `origin/main` you are), build output,
-`.vscode/mcp.json` registration, and `.personakit/` sandbox stats. Exits 0
-when everything is green.
+Read-only diagnostic. Reports on dependencies, LLM access (sampling default;
+fallback tokens if set), install state (recorded ref + install timestamp from
+`.personakit-version`), build output, `.vscode/mcp.json` registration, and
+`.personakit/` sandbox stats. Exits 0 when everything is green.
 
 ```bash
 # macOS / Linux
