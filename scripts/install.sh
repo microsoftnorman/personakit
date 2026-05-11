@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/microsoftnorman/personakit.git"
+REPO_URL="${PERSONAKIT_REPO_URL:-https://github.com/microsoftnorman/personakit.git}"
 TARGET_DIR="${PERSONAKIT_DIR:-./.personakit-plugin}"
 GIT_REF="${PERSONAKIT_REF:-main}"
 

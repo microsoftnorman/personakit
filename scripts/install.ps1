@@ -15,7 +15,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$RepoUrl   = 'https://github.com/microsoftnorman/personakit.git'
+$RepoUrl   = if ($env:PERSONAKIT_REPO_URL) { $env:PERSONAKIT_REPO_URL } else { 'https://github.com/microsoftnorman/personakit.git' }
 $TargetDir = if ($env:PERSONAKIT_DIR) { $env:PERSONAKIT_DIR } else { '.\.personakit-plugin' }
 $GitRef    = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
 

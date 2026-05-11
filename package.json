@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "npm run build -w personakit-mcp",
-    "test": "npm run test -w personakit-mcp"
+    "test": "npm run test -w personakit-mcp",
+    "test:scripts": "pwsh -NoProfile -Command \"Invoke-Pester -Path scripts/tests/install.Tests.ps1 -CI\"",
+    "test:scripts:sh": "bash scripts/tests/install.test.sh"
   }
 }
