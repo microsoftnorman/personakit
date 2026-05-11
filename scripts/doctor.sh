@@ -49,8 +49,8 @@ pk_bold "1. Dependencies"
 if ! pk_check_all_deps; then ISSUES=$((ISSUES+1)); fi
 echo
 
-# ─── 2. GitHub Copilot credential ──────────────────────────────────────────
-pk_bold "2. GitHub Copilot credential"
+# ─── 2. LLM access ─────────────────────────────────────────────────────────
+pk_bold "2. LLM access (MCP sampling preferred; env tokens are optional fallback)"
 pk_check_llm_credential
 echo
 

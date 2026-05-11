@@ -153,7 +153,7 @@ Top-level modules:
 | `src/store/index.ts` | All `.personakit/` filesystem I/O. `Store.resolve()` is the only path-resolver and refuses anything outside the workspace root (path-traversal guard). |
 | `src/safety/anonymize.ts` | PII redaction (email, phone, SSN, credit card, IP, secret-like tokens, URLs with tokens, street addresses, names). |
 | `src/audit.ts` | Append-only JSONL audit log under `.personakit/audit/YYYY-MM-DD.jsonl`. Scrubs secret-shaped fields before writing. |
-| `src/llm/client.ts` | GitHub-Copilot-only LLM dispatch. Auto-detects `GITHUB_MODELS_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`. No third-party providers by design. |
+| `src/llm/client.ts` | LLM dispatch. Prefers MCP host sampling (`server.createMessage`) when the host advertises the `sampling` capability; falls back to env-token GitHub Models (`GITHUB_MODELS_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`). |
 | `src/context.ts` | Per-request execution context (workspace root, store, llm, audit). |
 | `src/types.ts` | Shared zod schemas for `Persona`, `MarketBrief`, `InterviewTurn`, etc. |
 | `src/tools/*.ts` | One file per tool family — `research`, `personas`, `interview`, `panel`, `feedback`, `pricing`, `gtm`. |
@@ -346,13 +346,17 @@ replaces any value whose **key** matches a secret pattern (`token`, `apiKey`,
 
 ---
 
-## GitHub Copilot credential resolution
+## LLM credential resolution
 
-Personakit only works with GitHub Copilot. There are no fallbacks to OpenAI,
-Anthropic, or any other provider — by design. The goal is to reuse the same
-auth your Copilot host already has.
+Personakit prefers **MCP host sampling**: when running inside an MCP host that
+advertises the `sampling` capability (VS Code + Copilot Chat does), every LLM
+call is delegated to the host via `sampling/createMessage`. The host picks the
+model and supplies auth, so the server itself never sees a token — the user's
+existing Copilot session is reused with a one-time consent prompt.
 
-Resolved in this order, first non-empty wins:
+When sampling is unavailable (e.g. Copilot CLI today, or running the server
+standalone), Personakit falls back to a direct GitHub Models call using a
+token from the environment, in this order, first non-empty wins:
 
 1. `GITHUB_MODELS_TOKEN` — preferred. Explicit, scoped to GitHub Models.
 2. `GH_TOKEN` — the [GitHub Copilot CLI](https://github.com/github/copilot-cli)
@@ -360,14 +364,25 @@ Resolved in this order, first non-empty wins:
    from `copilot` without extra configuration.
 3. `GITHUB_TOKEN` — generic GitHub token, also accepted.
 
-If none are set, persona-generating tools fail fast with an instructive error
-naming all three variables. Read-only tools (`list_personas`, `list_artifacts`)
-work without credentials.
+If neither sampling nor a fallback token is available, persona-generating
+tools fail fast with an instructive error. Read-only tools (`list_personas`,
+`list_artifacts`) work without any LLM access at all.
 
-Why GitHub-only? Three reasons:
+Resolution is **deferred until the first LLM call** — the capability check
+runs after the MCP handshake completes, not at server boot, so the lazy
+client sees an accurate `getClientCapabilities()` result.
+
+Escape hatches:
+
+- `PERSONAKIT_FORCE_ENV_LLM=1` — bypass sampling and force the env-token
+  GitHub Models path. Useful for testing the fallback locally.
+- `PERSONAKIT_MODEL=<id>` — hint a specific model id (used for the audit
+  log under sampling; passed as the model name under the env-token path).
+
+Why not pluggable third-party providers? Three reasons:
 
 - **One auth surface.** If you have a Copilot subscription, you already have
-  the credential. No new account, no separate billing, no key rotation in two
+  what you need. No new account, no separate billing, no key rotation in two
   places.
 - **Deterministic safety surface.** The adversarial-review gate, the audit
   log, and the PII anonymizer were tested against GitHub-hosted models. Adding

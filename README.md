@@ -32,15 +32,15 @@ see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 - **git**
 - **Node.js ≥ 18** + **npm**
-- **GitHub Copilot.** Personakit is GitHub-Copilot-only by design — it uses
-  GitHub-hosted models exclusively and reuses your Copilot auth. Provide
-  one of these tokens:
-  - `GITHUB_MODELS_TOKEN` *(preferred — explicit, scoped to GitHub Models)*
-  - `GH_TOKEN` *(the [GitHub Copilot CLI](https://github.com/github/copilot-cli) sets this for the active session)*
-  - `GITHUB_TOKEN` *(generic GitHub token, also accepted)*
-- A Copilot host — either **VS Code Insiders + GitHub Copilot Chat** or the
-  **GitHub Copilot CLI** — to actually run the skills/agents. The MCP server
-  itself is host-agnostic, but every example assumes a Copilot host.
+- A Copilot host — either **VS Code Insiders + GitHub Copilot Chat** (recommended) or the **GitHub Copilot CLI**.
+
+**No token setup is required when running inside VS Code + Copilot Chat.** Personakit asks the host for LLM completions via [MCP sampling](https://modelcontextprotocol.io/specification/server/sampling), so it reuses your existing Copilot session — the first call triggers a one-time consent prompt.
+
+For hosts without sampling support (e.g. the Copilot CLI today), set **one** of these as a fallback:
+
+- `GITHUB_MODELS_TOKEN` *(preferred — explicit, scoped to GitHub Models)*
+- `GH_TOKEN` *(the [GitHub Copilot CLI](https://github.com/github/copilot-cli) sets this for the active session)*
+- `GITHUB_TOKEN` *(generic GitHub token, also accepted)*
 
 The installer below auto-detects your OS and package manager and prints exact
 install commands for anything missing.
@@ -72,7 +72,8 @@ The installer:
 3. Runs `npm install` and builds `personakit-mcp`.
 4. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
    existing one — prints a merge snippet instead).
-5. Reports whether a GitHub Copilot credential is set.
+5. Reports whether an LLM is reachable (host sampling default; env-token
+   fallback if set).
 
 Optional environment variables before the pipe:
 
@@ -89,7 +90,11 @@ Optional environment variables before the pipe:
 
 ---
 
-## 2. Set your GitHub Copilot credential
+## 2. (Optional) Set a fallback token
+
+Skip this step if you'll be using **VS Code + Copilot Chat** — sampling handles auth for you.
+
+Only needed for hosts without MCP sampling (e.g. the Copilot CLI today):
 
 ```bash
 # macOS / Linux
@@ -160,7 +165,7 @@ Set `PERSONAKIT_FORCE=1` to rebuild even when already up-to-date.
 
 ## 5. Health check (`doctor`)
 
-Read-only diagnostic. Reports on dependencies, GitHub Copilot credentials, plugin clone
+Read-only diagnostic. Reports on dependencies, LLM access (sampling default; fallback tokens if set), plugin clone
 state (incl. how many commits behind `origin/main` you are), build output,
 `.vscode/mcp.json` registration, and `.personakit/` sandbox stats. Exits 0
 when everything is green.
@@ -188,7 +193,7 @@ npm run build -w personakit-mcp
 
 Then install the plugin into Copilot the same way you would any
 [github/copilot-plugins](https://github.com/github/copilot-plugins) plugin,
-and set one of the GitHub Copilot credential env vars above.
+and set up your Copilot host. No token setup is needed when running inside VS Code + Copilot Chat (sampling handles it); see [Prerequisites](#prerequisites) for the optional fallback tokens.
 
 ---
 

@@ -129,20 +129,22 @@ pk_check_dep() {
   return 0
 }
 
-# Check the GitHub credential (warn-only — not a hard requirement at install time).
-# Personakit only works with GitHub Copilot. We accept GITHUB_MODELS_TOKEN
-# (preferred) or fall back to GH_TOKEN / GITHUB_TOKEN, both of which the
-# Copilot CLI sets for the active session.
+# Check the LLM credential (informational only — not required).
+# Personakit prefers MCP host sampling: when running inside VS Code + Copilot
+# Chat the host supplies the LLM and no token is required. Env-var tokens
+# (GITHUB_MODELS_TOKEN / GH_TOKEN / GITHUB_TOKEN) are an optional fallback
+# for hosts without sampling (e.g. Copilot CLI today).
 pk_check_llm_credential() {
   if [ -n "${GITHUB_MODELS_TOKEN:-}" ]; then
-    pk_ok "GitHub credential: GITHUB_MODELS_TOKEN"
+    pk_ok "Fallback token set: GITHUB_MODELS_TOKEN"
   elif [ -n "${GH_TOKEN:-}" ]; then
-    pk_ok "GitHub credential: GH_TOKEN (Copilot CLI session)"
+    pk_ok "Fallback token set: GH_TOKEN (Copilot CLI session)"
   elif [ -n "${GITHUB_TOKEN:-}" ]; then
-    pk_ok "GitHub credential: GITHUB_TOKEN"
+    pk_ok "Fallback token set: GITHUB_TOKEN"
   else
-    pk_warn "No GitHub credential set (GITHUB_MODELS_TOKEN / GH_TOKEN / GITHUB_TOKEN)"
-    pk_dim "Personakit only works with GitHub Copilot. Set one of:"
+    pk_info "No env-var token set — Personakit will use MCP host sampling (recommended)."
+    pk_dim "In VS Code + Copilot Chat this is the default and requires no setup."
+    pk_dim "Only set a token when running outside a sampling-capable host (e.g. Copilot CLI):"
     pk_dim "  export GITHUB_MODELS_TOKEN=<your token>      # preferred"
     pk_dim "  export GH_TOKEN=<your token>                 # Copilot CLI session token"
     pk_dim "  export GITHUB_TOKEN=<your token>             # generic GitHub token"

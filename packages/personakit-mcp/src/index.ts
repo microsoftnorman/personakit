@@ -23,6 +23,7 @@ import { Audit } from "./audit.js";
 import { Store } from "./store/index.js";
 import {
   createLlmClientFromEnv,
+  createLlmClientForServer,
   type LlmClient,
   MockLlmClient,
 } from "./llm/client.js";
@@ -183,13 +184,22 @@ export function buildContext(opts: BootOptions): ToolContext {
 
 export async function main(): Promise<void> {
   const workspaceRoot = process.env.PERSONAKIT_WORKSPACE_ROOT ?? process.cwd();
-  const ctx = buildContext({ workspaceRoot });
-  await ctx.store.init();
 
   const server = new Server(
     { name: "personakit-mcp", version: "0.1.0" },
     { capabilities: { tools: {} } },
   );
+
+  // Prefer MCP host sampling (no token required); fall back to env tokens.
+  // Resolution is deferred until the first LLM call so we can inspect
+  // capabilities advertised during the MCP handshake (which completes inside
+  // server.connect below).
+  const llm = process.env.PERSONAKIT_MOCK
+    ? new MockLlmClient(() => '```json\n{"mock":true}\n```')
+    : createLlmClientForServer(server, process.env);
+
+  const ctx = buildContext({ workspaceRoot, llm });
+  await ctx.store.init();
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOLS.map((t) => ({

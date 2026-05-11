@@ -128,8 +128,8 @@ JSON
 fi
 echo
 
-# ─── GitHub Copilot credential check (warn-only) ───────────────────────────
-pk_bold "GitHub Copilot credential"
+# ─── LLM access check (informational) ─────────────────────────────────────
+pk_bold "LLM access"
 pk_check_llm_credential
 echo
 
@@ -137,14 +137,15 @@ echo
 pk_bold "Done."
 echo
 echo "  Next steps:"
-echo "    1. Make sure you have a GitHub Copilot credential available:"
-echo "         export GITHUB_MODELS_TOKEN=<your token>      # preferred"
-echo "       (Copilot CLI's GH_TOKEN / GITHUB_TOKEN also work.)"
+echo "    1. Reload your editor (VS Code Insiders + Copilot Chat recommended)."
+echo "       No token setup required — Personakit uses MCP host sampling."
 echo
-echo "    2. Reload your editor (VS Code Insiders + Copilot Chat recommended)."
-echo
-echo "    3. In Copilot Chat, try:"
+echo "    2. In Copilot Chat, try:"
 echo "         \"Generate 5 synthetic personas for <your product brief>.\""
+echo "       (VS Code will prompt you to allow the first sampling call.)"
+echo
+echo "    Optional: only set GITHUB_MODELS_TOKEN / GH_TOKEN / GITHUB_TOKEN"
+echo "    when running outside a sampling-capable host (e.g. Copilot CLI)."
 echo
 echo "  Plugin location:    $TARGET_DIR"
 echo "  Skills + agents:    $TARGET_DIR/plugins/personakit/"

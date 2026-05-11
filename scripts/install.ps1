@@ -117,8 +117,8 @@ if ($env:PERSONAKIT_NO_VSCODE -eq '1') {
 }
 Write-Host ''
 
-# ─── GitHub Copilot credential check (warn-only) ───────────────────────────
-Write-PkBold 'GitHub Copilot credential'
+# ─── LLM access check (informational) ─────────────────────────────────────
+Write-PkBold 'LLM access'
 Test-PkLlmCredential
 Write-Host ''
 
@@ -126,14 +126,15 @@ Write-Host ''
 Write-PkBold 'Done.'
 Write-Host ''
 Write-Host '  Next steps:'
-Write-Host '    1. Make sure you have a GitHub Copilot credential available:'
-Write-Host '         $env:GITHUB_MODELS_TOKEN = "<your token>"   # preferred'
-Write-Host '       (Copilot CLI''s GH_TOKEN / GITHUB_TOKEN also work.)'
+Write-Host '    1. Reload your editor (VS Code Insiders + Copilot Chat recommended).'
+Write-Host '       No token setup required — Personakit uses MCP host sampling.'
 Write-Host ''
-Write-Host '    2. Reload your editor (VS Code Insiders + Copilot Chat recommended).'
-Write-Host ''
-Write-Host '    3. In Copilot Chat, try:'
+Write-Host '    2. In Copilot Chat, try:'
 Write-Host '         "Generate 5 synthetic personas for <your product brief>."'
+Write-Host '       (VS Code will prompt you to allow the first sampling call.)'
+Write-Host ''
+Write-Host '    Optional: only set GITHUB_MODELS_TOKEN / GH_TOKEN / GITHUB_TOKEN'
+Write-Host '    when running outside a sampling-capable host (e.g. Copilot CLI).'
 Write-Host ''
 Write-Host "  Plugin location:    $TargetDir"
 Write-Host "  Skills + agents:    $TargetDir\plugins\personakit\"

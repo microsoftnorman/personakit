@@ -57,8 +57,8 @@ Write-PkBold '1. Dependencies'
 if (-not (Test-PkAllDeps)) { $Issues++ }
 Write-Host ''
 
-# ─── 2. GitHub Copilot credential ──────────────────────────────────────────
-Write-PkBold '2. GitHub Copilot credential'
+# ─── 2. LLM access ─────────────────────────────────────────────────────────
+Write-PkBold '2. LLM access (MCP sampling preferred; env tokens are optional fallback)'
 Test-PkLlmCredential
 Write-Host ''
 
