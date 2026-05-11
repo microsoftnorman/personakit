@@ -4,18 +4,22 @@
 
 .DESCRIPTION
     End-to-end test of the installer that runs fully offline:
-      1. Creates a bare git clone of the working tree in $TestDrive\repo.git.
-      2. Points the installer at it via PERSONAKIT_REPO_URL.
+      1. Builds a zip of the working tree (shaped like a GitHub source
+         archive: a single top-level folder containing the repo).
+      2. Points the installer at it via PERSONAKIT_ARCHIVE_URL=file://...
       3. Runs the installer into a sandbox workspace and asserts:
-         - dependency check passed (script exited 0),
-         - the plugin was cloned and built (dist/index.js exists),
-         - .vscode/mcp.json was written with the expected shape,
-         - re-running is idempotent (update path),
+         - exits 0,
+         - source extracted into ./.personakit-plugin,
+         - .personakit-version stamp written,
+         - MCP server built (dist/index.js exists),
+         - .vscode/mcp.json registers the server,
+         - re-running is idempotent (replaces previous install),
          - PERSONAKIT_NO_VSCODE=1 skips the .vscode write,
-         - an existing .vscode/mcp.json is not overwritten.
+         - existing .vscode/mcp.json is preserved,
+         - install refuses to overwrite a non-Personakit target dir.
 
 .NOTES
-    Requires Pester v5+, git, node>=18, npm.
+    Requires Pester v5+, node>=18, npm. (No git required — installer is HTTP.)
     Run with:  Invoke-Pester -Path scripts/tests/install.Tests.ps1
 #>
 
@@ -29,22 +33,26 @@ BeforeAll {
         throw "install.ps1 not found at $script:InstallPs1"
     }
 
-    # Build a bare clone of the current working tree so the installer can
-    # `git clone` it without hitting the network. We use --local so
-    # uncommitted changes are NOT included; the test only validates whatever
-    # is committed on the current branch.
-    $script:BareRepo = Join-Path $TestDrive 'repo.git'
-    & git clone --quiet --bare $script:RepoRoot $script:BareRepo 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to create bare clone for tests."
-    }
+    # Build a zip of the working tree shaped like a GitHub source archive:
+    # a single top-level folder containing the repo contents. Excludes
+    # node_modules and dist for speed (npm install/build runs during the test).
+    $stage = Join-Path $TestDrive 'stage'
+    $top   = Join-Path $stage 'personakit-test'
+    New-Item -ItemType Directory -Path $top -Force | Out-Null
 
-    # Detect the current branch so the installer's --branch flag works.
-    $script:GitRef = (& git -C $script:RepoRoot rev-parse --abbrev-ref HEAD).Trim()
-    if (-not $script:GitRef -or $script:GitRef -eq 'HEAD') { $script:GitRef = 'main' }
+    Get-ChildItem -Path $script:RepoRoot -Force |
+        Where-Object { $_.Name -ne '.git' -and $_.Name -ne 'node_modules' } |
+        ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $top -Recurse -Force `
+                -Exclude @('node_modules', 'dist')
+        }
 
-    # Pester v5 scopes test functions per-block; defining with `function script:`
-    # makes Invoke-Installer visible inside every Describe/It below.
+    $script:ArchiveZip = Join-Path $TestDrive 'repo.zip'
+    Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $script:ArchiveZip -Force
+
+    # file:///d:/path/repo.zip — three slashes, forward separators.
+    $script:ArchiveUrl = "file:///$($script:ArchiveZip -replace '\\','/')"
+
     function script:Invoke-Installer {
         param(
             [Parameter(Mandatory=$true)] [string]$WorkspaceDir,
@@ -52,9 +60,9 @@ BeforeAll {
         )
 
         $envBlock = @{
-            PERSONAKIT_REPO_URL = "file:///$($script:BareRepo -replace '\\','/')"
-            PERSONAKIT_REF      = $script:GitRef
-            PERSONAKIT_DIR      = '.\.personakit-plugin'
+            PERSONAKIT_ARCHIVE_URL = $script:ArchiveUrl
+            PERSONAKIT_REF         = 'test'
+            PERSONAKIT_DIR         = '.\.personakit-plugin'
         }
         foreach ($k in $EnvVars.Keys) { $envBlock[$k] = $EnvVars[$k] }
 
@@ -98,8 +106,17 @@ Describe 'install.ps1 — fresh install' {
         $script:Result.ExitCode | Should -Be 0
     }
 
-    It 'clones the plugin into ./.personakit-plugin' {
-        Test-Path (Join-Path $script:Workspace '.personakit-plugin\.git') | Should -BeTrue
+    It 'extracts the source into ./.personakit-plugin' {
+        Test-Path (Join-Path $script:Workspace '.personakit-plugin\package.json') | Should -BeTrue
+    }
+
+    It 'writes a .personakit-version stamp with ref + archive_url' {
+        $stampFile = Join-Path $script:Workspace '.personakit-plugin\.personakit-version'
+        Test-Path $stampFile | Should -BeTrue
+        $stamp = Get-Content -LiteralPath $stampFile -Raw | ConvertFrom-Json
+        $stamp.ref         | Should -Be 'test'
+        $stamp.archive_url | Should -Be $script:ArchiveUrl
+        $stamp.installed   | Should -Not -BeNullOrEmpty
     }
 
     It 'builds packages/personakit-mcp/dist/index.js' {
@@ -121,8 +138,8 @@ Describe 'install.ps1 — fresh install' {
     }
 }
 
-Describe 'install.ps1 — re-run is idempotent' {
-    It 'succeeds when the clone already exists' {
+Describe 'install.ps1 — re-run is idempotent (replaces previous install)' {
+    It 'succeeds when the install dir already exists' {
         $ws = Join-Path $TestDrive 'rerun-workspace'
         New-Item -ItemType Directory -Path $ws -Force | Out-Null
 
@@ -135,6 +152,7 @@ Describe 'install.ps1 — re-run is idempotent' {
             Write-Host "STDERR:`n$($r2.StdErr)"
         }
         $r2.ExitCode | Should -Be 0
+        Test-Path (Join-Path $ws '.personakit-plugin\.personakit-version') | Should -BeTrue
     }
 }
 
@@ -161,5 +179,18 @@ Describe 'install.ps1 — preserves existing .vscode/mcp.json' {
 
         (Get-Content -LiteralPath (Join-Path $ws '.vscode\mcp.json') -Raw).Trim() |
             Should -Be $existing
+    }
+}
+
+Describe 'install.ps1 — refuses to overwrite a non-Personakit target dir' {
+    It 'exits non-zero and leaves the target untouched' {
+        $ws = Join-Path $TestDrive 'unsafe-target-workspace'
+        $target = Join-Path $ws '.personakit-plugin'
+        New-Item -ItemType Directory -Path $target -Force | Out-Null
+        Set-Content -Path (Join-Path $target 'IMPORTANT.txt') -Value 'do not delete' -Encoding UTF8
+
+        $r = Invoke-Installer -WorkspaceDir $ws
+        $r.ExitCode | Should -Not -Be 0
+        Test-Path (Join-Path $target 'IMPORTANT.txt') | Should -BeTrue
     }
 }

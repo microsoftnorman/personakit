@@ -3,20 +3,27 @@
 .SYNOPSIS
     Personakit updater (PowerShell / Windows).
 
+.DESCRIPTION
+    Re-downloads the source archive over HTTP and reinstalls into the existing
+    install directory. No `git` dependency. Refuses to touch the directory if
+    it does not look like a previous Personakit install.
+
 .EXAMPLE
     iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.ps1 | iex
 
 .NOTES
     Env vars:
-      PERSONAKIT_DIR     Default: .\.personakit-plugin
-      PERSONAKIT_REF     Default: main
-      PERSONAKIT_FORCE   Set to "1" to rebuild even when already up-to-date.
+      PERSONAKIT_DIR          Default: .\.personakit-plugin
+      PERSONAKIT_REF          Default: main
+      PERSONAKIT_ARCHIVE_URL  Override the archive URL
+      PERSONAKIT_FORCE        Set to "1" to reinstall even if .personakit-version
+                              already records the requested ref.
 #>
 
 $ErrorActionPreference = 'Stop'
 
 $TargetDir = if ($env:PERSONAKIT_DIR) { $env:PERSONAKIT_DIR } else { '.\.personakit-plugin' }
-$GitRef    = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
+$Ref       = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
 
 # ─── Source shared lib ──────────────────────────────────────────────────────
 $ScriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { '' }
@@ -26,7 +33,7 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'lib\common.ps1'))) {
 } elseif (Test-Path $LocalLib) {
     . $LocalLib
 } else {
-    $commonUrl = "https://raw.githubusercontent.com/microsoftnorman/personakit/$GitRef/scripts/lib/common.ps1"
+    $commonUrl = "https://raw.githubusercontent.com/microsoftnorman/personakit/$Ref/scripts/lib/common.ps1"
     try {
         $commonContent = (Invoke-WebRequest -UseBasicParsing -Uri $commonUrl).Content
     } catch {
@@ -39,69 +46,42 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'lib\common.ps1'))) {
 Write-PkBold 'Personakit updater'
 Write-Host ''
 
-if (-not (Test-Path (Join-Path $TargetDir '.git'))) {
-    Write-PkErr "No Personakit clone found at $TargetDir."
+# ─── Locate existing install ───────────────────────────────────────────────
+$verFile = Join-Path $TargetDir '.personakit-version'
+$mcpPkg  = Join-Path $TargetDir 'packages\personakit-mcp\package.json'
+if (-not (Test-Path $verFile) -and -not (Test-Path $mcpPkg)) {
+    Write-PkErr "No Personakit install found at $TargetDir."
     Write-PkDim 'Run the installer first:'
     Write-PkDim '  iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.ps1 | iex'
     exit 1
 }
-Write-PkOk "Found clone: $TargetDir"
+Write-PkOk "Found install: $TargetDir"
 
-# ─── Quick dep check ───────────────────────────────────────────────────────
-Write-PkInfo 'Verifying dependencies'
-if (-not (Test-PkAllDeps)) {
-    Write-PkErr 'Dependency check failed. Resolve the above and re-run.'
+if (Test-Path $verFile) {
+    try {
+        $current = Get-Content -LiteralPath $verFile -Raw | ConvertFrom-Json
+        Write-PkDim "Current ref: $($current.ref) (installed $($current.installed))"
+        if ($current.ref -eq $Ref -and $env:PERSONAKIT_FORCE -ne '1') {
+            Write-PkOk "Already on '$Ref'."
+            Write-Host ''
+            Write-PkDim 'Set $env:PERSONAKIT_FORCE = "1" to re-download and rebuild anyway.'
+            exit 0
+        }
+    } catch {
+        Write-PkWarn '.personakit-version present but unreadable — re-installing.'
+    }
+}
+Write-Host ''
+
+# ─── Re-run installer (it handles dep check, download, build, mcp.json) ────
+$installer = Join-Path $TargetDir 'scripts\install.ps1'
+if (-not (Test-Path $installer)) {
+    Write-PkErr "Installer script missing inside install dir: $installer"
+    Write-PkDim 'Reinstall from scratch:'
+    Write-PkDim '  iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.ps1 | iex'
     exit 1
 }
-Write-Host ''
 
-# ─── Compare local vs remote ───────────────────────────────────────────────
-Write-PkBold 'Checking for updates'
-git -C $TargetDir fetch --quiet origin $GitRef
-$local  = (git -C $TargetDir rev-parse HEAD).Trim()
-$remote = (git -C $TargetDir rev-parse "origin/$GitRef").Trim()
-$shortLocal  = $local.Substring(0,7)
-$shortRemote = $remote.Substring(0,7)
-
-if ($local -eq $remote) {
-    Write-PkOk "Already up-to-date ($shortLocal on $GitRef)."
-    if ($env:PERSONAKIT_FORCE -ne '1') {
-        Write-Host ''
-        Write-PkDim 'Set $env:PERSONAKIT_FORCE = "1" to rebuild anyway.'
-        exit 0
-    }
-    Write-PkInfo 'PERSONAKIT_FORCE=1 — rebuilding anyway.'
-} else {
-    $commitsBehind = (git -C $TargetDir rev-list --count "$local..$remote").Trim()
-    Write-PkInfo "Local:  $shortLocal"
-    Write-PkInfo "Remote: $shortRemote ($commitsBehind commit(s) ahead)"
-    Write-PkInfo 'Recent changes:'
-    git -C $TargetDir log --oneline --no-decorate -n 10 "$local..$remote" | ForEach-Object { Write-Host "    $_" }
-    Write-Host ''
-
-    Write-PkInfo 'Pulling…'
-    git -C $TargetDir checkout --quiet $GitRef
-    git -C $TargetDir pull --ff-only --quiet origin $GitRef
-    Write-PkOk "Updated to $shortRemote"
-}
-Write-Host ''
-
-# ─── Reinstall + rebuild ───────────────────────────────────────────────────
-Write-PkBold 'Reinstalling & rebuilding'
-Push-Location $TargetDir
-try {
-    Write-PkInfo 'npm install'
-    npm install --silent --no-audit --no-fund | Out-Null
-    Write-PkOk 'Dependencies installed'
-
-    Write-PkInfo 'Building personakit-mcp'
-    npm run --silent build -w personakit-mcp | Out-Null
-    Write-PkOk 'Built'
-} finally {
-    Pop-Location
-}
-Write-Host ''
-
-Write-PkBold 'Done.'
-Write-PkDim 'Reload your editor to pick up the new MCP server build.'
-Write-Host ''
+Write-PkInfo "Re-installing $TargetDir from ref '$Ref'…"
+& $installer
+exit $LASTEXITCODE

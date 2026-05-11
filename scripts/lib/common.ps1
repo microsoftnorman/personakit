@@ -103,7 +103,6 @@ function Test-PkLlmCredential {
 
 function Test-PkAllDeps {
     $ok = $true
-    if (-not (Test-PkDep -Cmd git  -Flag '--version')) { $ok = $false }
     if (-not (Test-PkDep -Cmd node -Min '18.0.0' -Flag '-v')) { $ok = $false }
     if (-not (Test-PkDep -Cmd npm  -Flag '-v'))  { $ok = $false }
     return $ok

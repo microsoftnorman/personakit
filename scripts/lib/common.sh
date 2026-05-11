@@ -154,10 +154,8 @@ pk_check_llm_credential() {
 # Run all required dep checks. Sets PK_DEPS_OK=1 on success.
 pk_check_all_deps() {
   PK_DEPS_OK=1
-  local rc
-  pk_check_dep git  ""    --version || PK_DEPS_OK=0
   pk_check_dep node 18.0.0 -v       || PK_DEPS_OK=0
-  pk_check_dep npm  ""    -v        || PK_DEPS_OK=0
+  pk_check_dep npm  ''    -v        || PK_DEPS_OK=0
   if [ "$PK_DEPS_OK" -eq 0 ]; then
     return 1
   fi

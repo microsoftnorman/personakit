@@ -4,12 +4,12 @@
 #   curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/doctor.sh | bash
 #
 # Reports on:
-#   - Dependencies (git, node 18+, npm)
-#   - GitHub Copilot credentials
-#   - Plugin clone state (path, branch, current vs latest commit)
+#   - Dependencies (node 18+, npm)
+#   - LLM access (MCP sampling preferred; env tokens optional fallback)
+#   - Install state (path, recorded ref + install timestamp)
 #   - Build output (dist/index.js present)
-#   - .vscode/mcp.json presence
-#   - .personakit/ sandbox stats (counts of personas, transcripts, GTM, audit)
+#   - .vscode/mcp.json registration
+#   - .personakit/ sandbox stats
 #
 # Env vars:
 #   PERSONAKIT_DIR   Default: ./.personakit-plugin
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 TARGET_DIR="${PERSONAKIT_DIR:-./.personakit-plugin}"
-GIT_REF="${PERSONAKIT_REF:-main}"
+REF="${PERSONAKIT_REF:-main}"
 SANDBOX_DIR="${PERSONAKIT_SANDBOX:-./.personakit}"
 
 # ─── Source shared lib ──────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/lib/common.sh" ]; then
 elif [ -d "$TARGET_DIR/scripts/lib" ]; then
   . "$TARGET_DIR/scripts/lib/common.sh"
 else
-  COMMON_URL="https://raw.githubusercontent.com/microsoftnorman/personakit/${GIT_REF}/scripts/lib/common.sh"
+  COMMON_URL="https://raw.githubusercontent.com/microsoftnorman/personakit/${REF}/scripts/lib/common.sh"
   COMMON_TMP="$(mktemp)"
   curl -fsSL "$COMMON_URL" -o "$COMMON_TMP"
   # shellcheck disable=SC1090
@@ -54,31 +54,23 @@ pk_bold "2. LLM access (MCP sampling preferred; env tokens are optional fallback
 pk_check_llm_credential
 echo
 
-# ─── 3. Clone state ────────────────────────────────────────────────────────
-pk_bold "3. Plugin clone state"
-if [ ! -d "$TARGET_DIR/.git" ]; then
-  pk_err "No clone at $TARGET_DIR"
+# ─── 3. Install state ──────────────────────────────────────────────────────
+pk_bold "3. Install state"
+VER_FILE="$TARGET_DIR/.personakit-version"
+if [ ! -d "$TARGET_DIR" ]; then
+  pk_err "No install at $TARGET_DIR"
   pk_dim "Install with: curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.sh | bash"
   ISSUES=$((ISSUES+1))
+elif [ -f "$VER_FILE" ]; then
+  CUR_REF="$(grep -oE '"ref":"[^"]+"' "$VER_FILE" | head -n1 | cut -d'"' -f4 || echo '')"
+  CUR_INSTALLED="$(grep -oE '"installed":"[^"]+"' "$VER_FILE" | head -n1 | cut -d'"' -f4 || echo '')"
+  CUR_URL="$(grep -oE '"archive_url":"[^"]+"' "$VER_FILE" | head -n1 | cut -d'"' -f4 || echo '')"
+  pk_ok "Install: $TARGET_DIR"
+  pk_dim "Ref: $CUR_REF"
+  pk_dim "Installed: $CUR_INSTALLED"
+  pk_dim "Source: $CUR_URL"
 else
-  BRANCH="$(git -C "$TARGET_DIR" rev-parse --abbrev-ref HEAD)"
-  LOCAL="$(git -C "$TARGET_DIR" rev-parse HEAD)"
-  pk_ok "Clone: $TARGET_DIR"
-  pk_dim "Branch: $BRANCH @ ${LOCAL:0:7}"
-
-  # Try to compare with remote (offline-tolerant).
-  if git -C "$TARGET_DIR" fetch --quiet origin "$GIT_REF" 2>/dev/null; then
-    REMOTE="$(git -C "$TARGET_DIR" rev-parse "origin/$GIT_REF")"
-    if [ "$LOCAL" = "$REMOTE" ]; then
-      pk_ok "Up-to-date with origin/$GIT_REF"
-    else
-      BEHIND="$(git -C "$TARGET_DIR" rev-list --count "$LOCAL..$REMOTE")"
-      pk_warn "$BEHIND commit(s) behind origin/$GIT_REF (${REMOTE:0:7})"
-      pk_dim "Update with: curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.sh | bash"
-    fi
-  else
-    pk_warn "Could not contact origin (offline?). Skipping remote compare."
-  fi
+  pk_warn "Install: $TARGET_DIR (no .personakit-version stamp — installed by an older script?)"
 fi
 echo
 

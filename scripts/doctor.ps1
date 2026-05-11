@@ -8,12 +8,12 @@
 
 .NOTES
     Reports on:
-      - Dependencies (git, node 18+, npm)
-      - GitHub Copilot credentials
-      - Plugin clone state (path, branch, current vs latest commit)
-      - Build output (dist/index.js present)
-      - .vscode/mcp.json presence
-      - .personakit/ sandbox stats
+      - Dependencies (node 18+, npm)
+      - LLM access (MCP sampling preferred; env tokens optional)
+      - Install state (path, recorded ref + install timestamp)
+      - Build output (dist\index.js present)
+      - .vscode\mcp.json registration
+      - .personakit\ sandbox stats
 
     Env vars:
       PERSONAKIT_DIR     Default: .\.personakit-plugin
@@ -24,7 +24,7 @@
 $ErrorActionPreference = 'Continue'
 
 $TargetDir  = if ($env:PERSONAKIT_DIR) { $env:PERSONAKIT_DIR } else { '.\.personakit-plugin' }
-$GitRef     = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
+$Ref        = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
 $SandboxDir = if ($env:PERSONAKIT_SANDBOX) { $env:PERSONAKIT_SANDBOX } else { '.\.personakit' }
 
 # ─── Source shared lib ──────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'lib\common.ps1'))) {
 } elseif (Test-Path $LocalLib) {
     . $LocalLib
 } else {
-    $commonUrl = "https://raw.githubusercontent.com/microsoftnorman/personakit/$GitRef/scripts/lib/common.ps1"
+    $commonUrl = "https://raw.githubusercontent.com/microsoftnorman/personakit/$Ref/scripts/lib/common.ps1"
     try {
         $commonContent = (Invoke-WebRequest -UseBasicParsing -Uri $commonUrl).Content
     } catch {
@@ -62,31 +62,25 @@ Write-PkBold '2. LLM access (MCP sampling preferred; env tokens are optional fal
 Test-PkLlmCredential
 Write-Host ''
 
-# ─── 3. Clone state ────────────────────────────────────────────────────────
-Write-PkBold '3. Plugin clone state'
-if (-not (Test-Path (Join-Path $TargetDir '.git'))) {
-    Write-PkErr "No clone at $TargetDir"
+# ─── 3. Install state ──────────────────────────────────────────────────────
+Write-PkBold '3. Install state'
+$verFile = Join-Path $TargetDir '.personakit-version'
+if (-not (Test-Path $TargetDir)) {
+    Write-PkErr "No install at $TargetDir"
     Write-PkDim 'Install with: iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.ps1 | iex'
     $Issues++
-} else {
-    $branch = (git -C $TargetDir rev-parse --abbrev-ref HEAD).Trim()
-    $local  = (git -C $TargetDir rev-parse HEAD).Trim()
-    Write-PkOk "Clone: $TargetDir"
-    Write-PkDim "Branch: $branch @ $($local.Substring(0,7))"
-
+} elseif (Test-Path $verFile) {
     try {
-        git -C $TargetDir fetch --quiet origin $GitRef 2>$null
-        $remote = (git -C $TargetDir rev-parse "origin/$GitRef").Trim()
-        if ($local -eq $remote) {
-            Write-PkOk "Up-to-date with origin/$GitRef"
-        } else {
-            $behind = (git -C $TargetDir rev-list --count "$local..$remote").Trim()
-            Write-PkWarn "$behind commit(s) behind origin/$GitRef ($($remote.Substring(0,7)))"
-            Write-PkDim 'Update with: iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.ps1 | iex'
-        }
+        $v = Get-Content -LiteralPath $verFile -Raw | ConvertFrom-Json
+        Write-PkOk "Install: $TargetDir"
+        Write-PkDim "Ref: $($v.ref)"
+        Write-PkDim "Installed: $($v.installed)"
+        Write-PkDim "Source: $($v.archive_url)"
     } catch {
-        Write-PkWarn 'Could not contact origin (offline?). Skipping remote compare.'
+        Write-PkWarn "Install: $TargetDir (.personakit-version unreadable)"
     }
+} else {
+    Write-PkWarn "Install: $TargetDir (no .personakit-version stamp — installed by an older script?)"
 }
 Write-Host ''
 

@@ -3,34 +3,35 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.sh | bash
 #
-# What this does:
-#   1. Verifies dependencies (git, node 18+, npm) with OS-aware install hints.
-#   2. Clones microsoftnorman/personakit into ./.personakit-plugin/
-#      (or PERSONAKIT_DIR if set).
-#   3. Runs `npm install` and builds the MCP server.
-#   4. Writes a `.vscode/mcp.json` registering personakit (won't overwrite).
-#   5. Prints next steps.
+# Downloads a GitHub source archive over HTTP, extracts it into
+# ./.personakit-plugin/, builds the MCP server, and registers
+# .vscode/mcp.json. No `git` dependency.
 #
 # Env vars (all optional):
-#   PERSONAKIT_DIR         Target dir for the clone. Default: ./.personakit-plugin
-#   PERSONAKIT_REF         Git ref to check out. Default: main
-#   PERSONAKIT_NO_VSCODE   Set to "1" to skip writing .vscode/mcp.json
+#   PERSONAKIT_DIR          Target dir for the install. Default: ./.personakit-plugin
+#   PERSONAKIT_REF          Branch / tag / SHA. Default: main
+#   PERSONAKIT_ARCHIVE_URL  Direct override for the archive URL (used by tests
+#                           and self-hosted mirrors). When unset, the URL is
+#                           derived as
+#                           https://codeload.github.com/microsoftnorman/personakit/tar.gz/<ref>.
+#   PERSONAKIT_NO_VSCODE    Set to "1" to skip writing .vscode/mcp.json.
 
 set -euo pipefail
 
-REPO_URL="${PERSONAKIT_REPO_URL:-https://github.com/microsoftnorman/personakit.git}"
+REPO_OWNER="microsoftnorman"
+REPO_NAME="personakit"
 TARGET_DIR="${PERSONAKIT_DIR:-./.personakit-plugin}"
-GIT_REF="${PERSONAKIT_REF:-main}"
+REF="${PERSONAKIT_REF:-main}"
+DEFAULT_ARCHIVE_URL="https://codeload.github.com/${REPO_OWNER}/${REPO_NAME}/tar.gz/${REF}"
+ARCHIVE_URL="${PERSONAKIT_ARCHIVE_URL:-$DEFAULT_ARCHIVE_URL}"
 
 # ─── Source shared lib ──────────────────────────────────────────────────────
-# Two paths: (1) sourced from a local checkout at scripts/install.sh,
-#            (2) piped from curl — fetch lib/common.sh from raw.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || SCRIPT_DIR=""
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/lib/common.sh" ]; then
   # shellcheck source=lib/common.sh
   . "$SCRIPT_DIR/lib/common.sh"
 else
-  COMMON_URL="https://raw.githubusercontent.com/microsoftnorman/personakit/${GIT_REF}/scripts/lib/common.sh"
+  COMMON_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REF}/scripts/lib/common.sh"
   COMMON_TMP="$(mktemp)"
   if ! curl -fsSL "$COMMON_URL" -o "$COMMON_TMP"; then
     echo "✗ Could not fetch shared lib from $COMMON_URL" >&2
@@ -41,12 +42,31 @@ else
   rm -f "$COMMON_TMP"
 fi
 
+# ─── Helpers (script-local) ─────────────────────────────────────────────────
+pk_fetch_archive() {
+  # $1 = url, $2 = dest path
+  case "$1" in
+    file://*)
+      # Strip scheme; curl -o on file:// also works but Copy is portable.
+      local local_path="${1#file://}"
+      cp "$local_path" "$2"
+      ;;
+    *)
+      curl -fsSL "$1" -o "$2"
+      ;;
+  esac
+}
+
+pk_looks_like_install() {
+  [ -f "$1/.personakit-version" ] || [ -f "$1/packages/personakit-mcp/package.json" ]
+}
+
 pk_bold "Personakit installer"
 echo
 pk_info "Detected OS: $(pk_detect_os) (package manager: $(pk_detect_pkg_manager))"
 echo
 
-# ─── Dependency check ──────────────────────────────────────────────────────
+# ─── Dependency check (no git required) ─────────────────────────────────────
 pk_bold "Checking dependencies"
 if ! pk_check_all_deps; then
   echo
@@ -55,19 +75,53 @@ if ! pk_check_all_deps; then
 fi
 echo
 
-# ─── Clone or update ────────────────────────────────────────────────────────
+# ─── Download + extract ─────────────────────────────────────────────────────
 pk_bold "Fetching source"
-if [ -d "$TARGET_DIR/.git" ]; then
-  pk_info "Updating existing clone at $TARGET_DIR"
-  git -C "$TARGET_DIR" fetch --quiet origin "$GIT_REF"
-  git -C "$TARGET_DIR" checkout --quiet "$GIT_REF"
-  git -C "$TARGET_DIR" pull --ff-only --quiet origin "$GIT_REF"
-  pk_ok "Updated to latest $GIT_REF"
-else
-  pk_info "Cloning $REPO_URL into $TARGET_DIR"
-  git clone --quiet --branch "$GIT_REF" --depth 1 "$REPO_URL" "$TARGET_DIR"
-  pk_ok "Cloned"
+WORK_TMP="$(mktemp -d)"
+trap 'rm -rf "$WORK_TMP"' EXIT
+ARCHIVE="$WORK_TMP/archive.tar.gz"
+EXTRACT_DIR="$WORK_TMP/extract"
+mkdir -p "$EXTRACT_DIR"
+
+pk_info "Downloading $ARCHIVE_URL"
+pk_fetch_archive "$ARCHIVE_URL" "$ARCHIVE"
+SIZE_KB="$(( $(wc -c < "$ARCHIVE") / 1024 ))"
+pk_ok "Downloaded ${SIZE_KB} KB"
+
+pk_info "Extracting…"
+tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
+EXTRACTED="$(find "$EXTRACT_DIR" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+if [ -z "$EXTRACTED" ]; then
+  pk_err "Archive did not contain a top-level folder."
+  exit 1
 fi
+
+# Resolve target to an absolute path so the move is predictable.
+case "$TARGET_DIR" in
+  /*) ABS_TARGET="$TARGET_DIR" ;;
+  *)  ABS_TARGET="$(pwd)/${TARGET_DIR#./}" ;;
+esac
+PARENT_DIR="$(dirname "$ABS_TARGET")"
+mkdir -p "$PARENT_DIR"
+
+if [ -e "$ABS_TARGET" ]; then
+  if ! pk_looks_like_install "$ABS_TARGET"; then
+    pk_err "Refusing to overwrite $ABS_TARGET — it doesn't look like a previous Personakit install."
+    pk_dim "Move or delete it manually, or set PERSONAKIT_DIR to a different path."
+    exit 1
+  fi
+  pk_info "Replacing existing install at $ABS_TARGET"
+  rm -rf "$ABS_TARGET"
+fi
+mv "$EXTRACTED" "$ABS_TARGET"
+
+# Stamp version file.
+INSTALLED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf '{"ref":"%s","archive_url":"%s","installed":"%s"}\n' \
+  "$REF" "$ARCHIVE_URL" "$INSTALLED_AT" \
+  > "$ABS_TARGET/.personakit-version"
+
+pk_ok "Installed to $ABS_TARGET"
 echo
 
 # ─── Install + build ────────────────────────────────────────────────────────
@@ -128,7 +182,7 @@ JSON
 fi
 echo
 
-# ─── LLM access check (informational) ─────────────────────────────────────
+# ─── LLM access check (informational) ──────────────────────────────────────
 pk_bold "LLM access"
 pk_check_llm_credential
 echo
@@ -151,7 +205,7 @@ echo "  Plugin location:    $TARGET_DIR"
 echo "  Skills + agents:    $TARGET_DIR/plugins/personakit/"
 echo "  Reference example:  $TARGET_DIR/examples/saas-project-management-tool/"
 echo
-echo "  To check for updates later:"
+echo "  To update later:"
 echo "    curl -fsSL https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.sh | bash"
 echo
 echo "  To run a health check:"

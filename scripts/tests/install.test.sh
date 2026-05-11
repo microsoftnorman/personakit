@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # End-to-end test for scripts/install.sh.
 #
-# Runs fully offline by cloning the current working tree into a bare repo and
-# pointing the installer at it via PERSONAKIT_REPO_URL.
+# Runs fully offline by building a tar.gz of the working tree and pointing the
+# installer at it via PERSONAKIT_ARCHIVE_URL=file://...
 #
 # Usage:  bash scripts/tests/install.test.sh
-# Requires: bash, git, node>=18, npm.
+# Requires: bash, tar, node>=18, npm. (No git required.)
 
 set -euo pipefail
 
@@ -27,18 +27,39 @@ assert_file()    { if [ -f "$1" ]; then pass "exists: $1"; else fail "missing: $
 assert_no_file() { if [ ! -e "$1" ]; then pass "absent: $1"; else fail "should be absent: $1"; fi; }
 assert_grep()    { if grep -q "$2" "$1"; then pass "grep '$2' in $(basename "$1")"; else fail "grep '$2' missing in $1"; fi; }
 
-# ─── Build a bare clone of the working tree (offline source) ────────────────
-BARE="$TMP/repo.git"
-git clone --quiet --bare "$REPO_ROOT" "$BARE"
-GIT_REF="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)"
-[ "$GIT_REF" = "HEAD" ] && GIT_REF="main"
+# ─── Build a tar.gz of the working tree, GitHub-archive-shaped ──────────────
+STAGE="$TMP/stage"
+TOP="$STAGE/personakit-test"
+mkdir -p "$TOP"
+# Copy everything except .git and node_modules.
+( cd "$REPO_ROOT" && \
+  find . -mindepth 1 -maxdepth 1 \
+    \( -name .git -o -name node_modules \) -prune -o -print | \
+  while read -r p; do
+    [ "$p" = "." ] && continue
+    rel="${p#./}"
+    if [ -d "$p" ]; then
+      mkdir -p "$TOP/$rel"
+    else
+      mkdir -p "$TOP/$(dirname "$rel")"
+      cp "$p" "$TOP/$rel"
+    fi
+  done
+)
+# Strip nested node_modules / dist directories that may have been copied.
+find "$TOP" -type d \( -name node_modules -o -name dist \) -prune -exec rm -rf {} +
+
+ARCHIVE="$TMP/repo.tar.gz"
+( cd "$STAGE" && tar -czf "$ARCHIVE" personakit-test )
+
+ARCHIVE_URL="file://$ARCHIVE"
 
 run_installer() {
   # $1 = workspace dir, remaining args = extra env assignments (KEY=VAL)
   local ws="$1"; shift
   ( cd "$ws" \
-    && PERSONAKIT_REPO_URL="file://$BARE" \
-       PERSONAKIT_REF="$GIT_REF" \
+    && PERSONAKIT_ARCHIVE_URL="$ARCHIVE_URL" \
+       PERSONAKIT_REF="test" \
        PERSONAKIT_DIR="./.personakit-plugin" \
        env "$@" bash "$INSTALL_SH" )
 }
@@ -51,11 +72,13 @@ else
   fail "installer exited non-zero"
   cat "$TMP/t1.log" >&2
 fi
-assert_file "$WS1/.personakit-plugin/.git/HEAD"
+assert_file "$WS1/.personakit-plugin/package.json"
+assert_file "$WS1/.personakit-plugin/.personakit-version"
 assert_file "$WS1/.personakit-plugin/packages/personakit-mcp/dist/index.js"
 assert_file "$WS1/.vscode/mcp.json"
 assert_grep "$WS1/.vscode/mcp.json" '"personakit"'
 assert_grep "$WS1/.vscode/mcp.json" 'personakit-mcp/dist/index.js'
+assert_grep "$WS1/.personakit-plugin/.personakit-version" '"ref":"test"'
 
 echo "── Test 2: re-run is idempotent"
 if run_installer "$WS1" >"$TMP/t2.log" 2>&1; then
@@ -64,6 +87,7 @@ else
   fail "second run failed"
   cat "$TMP/t2.log" >&2
 fi
+assert_file "$WS1/.personakit-plugin/.personakit-version"
 
 echo "── Test 3: PERSONAKIT_NO_VSCODE=1 skips mcp.json"
 WS3="$TMP/no-vscode"; mkdir -p "$WS3"
@@ -91,6 +115,16 @@ if [ "$ACTUAL" = "$ORIGINAL" ]; then
 else
   fail "existing mcp.json was modified"
 fi
+
+echo "── Test 5: refuses to overwrite a non-Personakit target dir"
+WS5="$TMP/unsafe"; mkdir -p "$WS5/.personakit-plugin"
+echo "do not delete" > "$WS5/.personakit-plugin/IMPORTANT.txt"
+if run_installer "$WS5" >"$TMP/t5.log" 2>&1; then
+  fail "installer should have refused but exited 0"
+else
+  pass "installer exited non-zero"
+fi
+assert_file "$WS5/.personakit-plugin/IMPORTANT.txt"
 
 echo
 echo "── Summary: $PASS passed, $FAIL failed"

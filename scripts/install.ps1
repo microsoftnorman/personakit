@@ -3,28 +3,45 @@
 .SYNOPSIS
     Personakit one-line installer (PowerShell / Windows).
 
+.DESCRIPTION
+    Downloads a GitHub source archive over HTTP, extracts it into
+    .\.personakit-plugin\, builds the MCP server, and registers
+    .vscode\mcp.json. No `git` dependency.
+
 .EXAMPLE
     iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/install.ps1 | iex
 
 .NOTES
     Env vars (all optional):
-      PERSONAKIT_DIR          Target dir for the clone. Default: .\.personakit-plugin
-      PERSONAKIT_REF          Git ref to check out. Default: main
-      PERSONAKIT_NO_VSCODE    Set to "1" to skip writing .vscode\mcp.json
+      PERSONAKIT_DIR          Target dir for the install. Default: .\.personakit-plugin
+      PERSONAKIT_REF          Branch / tag / SHA. Default: main
+      PERSONAKIT_ARCHIVE_URL  Direct override for the archive URL (used by tests
+                              and for self-hosted mirrors). When unset, the URL
+                              is derived as
+                              https://codeload.github.com/microsoftnorman/personakit/zip/<ref>.
+      PERSONAKIT_NO_VSCODE    Set to "1" to skip writing .vscode\mcp.json.
 #>
 
 $ErrorActionPreference = 'Stop'
 
-$RepoUrl   = if ($env:PERSONAKIT_REPO_URL) { $env:PERSONAKIT_REPO_URL } else { 'https://github.com/microsoftnorman/personakit.git' }
+$RepoOwner = 'microsoftnorman'
+$RepoName  = 'personakit'
 $TargetDir = if ($env:PERSONAKIT_DIR) { $env:PERSONAKIT_DIR } else { '.\.personakit-plugin' }
-$GitRef    = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
+$Ref       = if ($env:PERSONAKIT_REF) { $env:PERSONAKIT_REF } else { 'main' }
+
+$DefaultArchiveUrl = "https://codeload.github.com/$RepoOwner/$RepoName/zip/$Ref"
+$ArchiveUrl = if ($env:PERSONAKIT_ARCHIVE_URL) {
+    $env:PERSONAKIT_ARCHIVE_URL
+} else {
+    $DefaultArchiveUrl
+}
 
 # ─── Source shared lib ──────────────────────────────────────────────────────
 $ScriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { '' }
 if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'lib\common.ps1'))) {
     . (Join-Path $ScriptDir 'lib\common.ps1')
 } else {
-    $commonUrl = "https://raw.githubusercontent.com/microsoftnorman/personakit/$GitRef/scripts/lib/common.ps1"
+    $commonUrl = "https://raw.githubusercontent.com/$RepoOwner/$RepoName/$Ref/scripts/lib/common.ps1"
     try {
         $commonContent = (Invoke-WebRequest -UseBasicParsing -Uri $commonUrl).Content
     } catch {
@@ -34,12 +51,35 @@ if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir 'lib\common.ps1'))) {
     Invoke-Expression $commonContent
 }
 
+# ─── Helpers (script-local) ────────────────────────────────────────────────
+function Get-PkArchive {
+    param([string]$Url, [string]$DestZip)
+    if ($Url -like 'file://*') {
+        # Convert "file:///d:/path/foo.zip" → "d:\path\foo.zip" so we can use
+        # Copy-Item (Invoke-WebRequest's file:// support is inconsistent
+        # across PowerShell editions).
+        $local = $Url -replace '^file:///?', ''
+        $local = [Uri]::UnescapeDataString($local) -replace '/', '\'
+        Copy-Item -LiteralPath $local -Destination $DestZip -Force
+    } else {
+        Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $DestZip
+    }
+}
+
+function Test-PkLooksLikeInstall {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return $false }
+    return (Test-Path (Join-Path $Path '.personakit-version')) -or
+           (Test-Path (Join-Path $Path 'packages\personakit-mcp\package.json'))
+}
+
+# ─── Main ───────────────────────────────────────────────────────────────────
 Write-PkBold 'Personakit installer'
 Write-Host ''
 Write-PkInfo "Detected package manager: $(Get-PkPkgManager)"
 Write-Host ''
 
-# ─── Dependency check ───────────────────────────────────────────────────────
+# ─── Dependency check (no git required) ────────────────────────────────────
 Write-PkBold 'Checking dependencies'
 if (-not (Test-PkAllDeps)) {
     Write-Host ''
@@ -48,18 +88,57 @@ if (-not (Test-PkAllDeps)) {
 }
 Write-Host ''
 
-# ─── Clone or update ────────────────────────────────────────────────────────
+# ─── Download + extract ─────────────────────────────────────────────────────
 Write-PkBold 'Fetching source'
-if (Test-Path (Join-Path $TargetDir '.git')) {
-    Write-PkInfo "Updating existing clone at $TargetDir"
-    git -C $TargetDir fetch --quiet origin $GitRef
-    git -C $TargetDir checkout --quiet $GitRef
-    git -C $TargetDir pull --ff-only --quiet origin $GitRef
-    Write-PkOk "Updated to latest $GitRef"
-} else {
-    Write-PkInfo "Cloning $RepoUrl into $TargetDir"
-    git clone --quiet --branch $GitRef --depth 1 $RepoUrl $TargetDir
-    Write-PkOk 'Cloned'
+$workTmp    = Join-Path ([System.IO.Path]::GetTempPath()) ("personakit-" + [guid]::NewGuid().ToString('N'))
+$zipPath    = Join-Path $workTmp 'archive.zip'
+$extractDir = Join-Path $workTmp 'extract'
+New-Item -ItemType Directory -Path $workTmp, $extractDir -Force | Out-Null
+try {
+    Write-PkInfo "Downloading $ArchiveUrl"
+    Get-PkArchive -Url $ArchiveUrl -DestZip $zipPath
+    Write-PkOk "Downloaded $([math]::Round((Get-Item $zipPath).Length / 1KB)) KB"
+
+    Write-PkInfo 'Extracting…'
+    Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+    $extracted = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+    if (-not $extracted) {
+        Write-PkErr 'Archive did not contain a top-level folder.'
+        exit 1
+    }
+
+    $parentDir = Split-Path $TargetDir -Parent
+    if ($parentDir -and -not (Test-Path $parentDir)) {
+        New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+    }
+    $absTarget = if ([System.IO.Path]::IsPathRooted($TargetDir)) {
+        $TargetDir
+    } else {
+        Join-Path (Get-Location).Path $TargetDir
+    }
+
+    if (Test-Path $absTarget) {
+        if (-not (Test-PkLooksLikeInstall $absTarget)) {
+            Write-PkErr "Refusing to overwrite $absTarget — it doesn't look like a previous Personakit install."
+            Write-PkDim 'Move or delete it manually, or set $env:PERSONAKIT_DIR to a different path.'
+            exit 1
+        }
+        Write-PkInfo "Replacing existing install at $absTarget"
+        Remove-Item -Recurse -Force $absTarget
+    }
+    Move-Item -LiteralPath $extracted.FullName -Destination $absTarget
+
+    # Stamp a small version file so update/doctor know what's installed.
+    $stamp = [pscustomobject]@{
+        ref         = $Ref
+        archive_url = $ArchiveUrl
+        installed   = (Get-Date).ToString('o')
+    } | ConvertTo-Json -Compress
+    Set-Content -LiteralPath (Join-Path $absTarget '.personakit-version') -Value $stamp -Encoding UTF8
+
+    Write-PkOk "Installed to $absTarget"
+} finally {
+    if (Test-Path $workTmp) { Remove-Item -Recurse -Force $workTmp }
 }
 Write-Host ''
 
@@ -117,7 +196,7 @@ if ($env:PERSONAKIT_NO_VSCODE -eq '1') {
 }
 Write-Host ''
 
-# ─── LLM access check (informational) ─────────────────────────────────────
+# ─── LLM access check (informational) ──────────────────────────────────────
 Write-PkBold 'LLM access'
 Test-PkLlmCredential
 Write-Host ''
@@ -140,7 +219,7 @@ Write-Host "  Plugin location:    $TargetDir"
 Write-Host "  Skills + agents:    $TargetDir\plugins\personakit\"
 Write-Host "  Reference example:  $TargetDir\examples\saas-project-management-tool\"
 Write-Host ''
-Write-Host '  To check for updates later:'
+Write-Host '  To update later:'
 Write-Host '    iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scripts/update.ps1 | iex'
 Write-Host ''
 Write-Host '  To run a health check:'

@@ -30,7 +30,6 @@ see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ## Prerequisites
 
-- **git**
 - **Node.js ≥ 18** + **npm**
 - A Copilot host — either **VS Code Insiders + GitHub Copilot Chat** (recommended) or the **GitHub Copilot CLI**.
 
@@ -65,10 +64,13 @@ iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scri
 
 The installer:
 
-1. Detects your OS + package manager and **dependency-checks** `git`,
-   `node ≥ 18`, and `npm`. Missing tools? It prints an OS-specific install
-   command and exits without touching your machine.
-2. Clones the repo into `./.personakit-plugin/`.
+1. Detects your OS + package manager and **dependency-checks** `node ≥ 18`
+   and `npm`. Missing tools? It prints an OS-specific install command and
+   exits without touching your machine.
+2. **Downloads** the latest source archive over HTTP from
+   `codeload.github.com` (no `git` required) and extracts it into
+   `./.personakit-plugin/`. Stamps a `.personakit-version` file recording the
+   ref and install timestamp.
 3. Runs `npm install` and builds `personakit-mcp`.
 4. Writes `.vscode/mcp.json` registering the MCP server (won't overwrite an
    existing one — prints a merge snippet instead).
@@ -79,8 +81,9 @@ Optional environment variables before the pipe:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PERSONAKIT_DIR` | `./.personakit-plugin` | Where to clone |
-| `PERSONAKIT_REF` | `main` | Git ref to check out |
+| `PERSONAKIT_DIR` | `./.personakit-plugin` | Where to install |
+| `PERSONAKIT_REF` | `main` | Branch / tag / SHA to download |
+| `PERSONAKIT_ARCHIVE_URL` | derived from `PERSONAKIT_REF` | Override the archive URL (self-hosted mirror, local file, etc.) |
 | `PERSONAKIT_NO_VSCODE` | unset | Set to `1` to skip the `.vscode/mcp.json` write |
 
 > ⚠️ **Read before piping anything into your shell.** Inspect
@@ -185,8 +188,11 @@ iwr -useb https://raw.githubusercontent.com/microsoftnorman/personakit/main/scri
 ## Manual install (if you'd rather)
 
 ```bash
-git clone https://github.com/microsoftnorman/personakit.git
-cd personakit
+# Download and extract the latest source (no git required)
+curl -fsSL https://codeload.github.com/microsoftnorman/personakit/tar.gz/main -o personakit.tar.gz
+tar -xzf personakit.tar.gz
+mv personakit-main .personakit-plugin
+cd .personakit-plugin
 npm install
 npm run build -w personakit-mcp
 ```
